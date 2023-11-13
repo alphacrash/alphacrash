@@ -5,7 +5,7 @@ date: '2023-11-13'
 coverImage: '/assets/blog/hello-world/cover.jpg'
 ---
 ---
-# JavaScript - Polyfills
+# Polyfills
 
 ## forEach
 
