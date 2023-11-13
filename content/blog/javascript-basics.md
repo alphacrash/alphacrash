@@ -1,3 +1,10 @@
+---
+title: 'JavaScript - Basics'
+excerpt: 'Basics of JavaScript'
+date: '2023-11-11'
+coverImage: '/assets/blog/hello-world/cover.jpg'
+---
+---
 # Basics
 
 ## Arrays
