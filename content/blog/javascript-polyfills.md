@@ -16,14 +16,14 @@ const names = ["John", "Jane", "Doe"];
 names.forEach(x => console.log(x));
 ```
 
-### Console
+#### Console
 ```console
 "John"
 "Jane"
 "Doe"
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.forEachX = function (callback) {
   for (let i = 0; i < this.length; i++) {
@@ -45,12 +45,12 @@ const newUsers = users.map(x => x + x);
 console.log(newUsers);
 ```
 
-### Console
+#### Console
 ```console
 [2, 4, 6]
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.mapX = function (callback) {
   const newArray = [];
@@ -75,12 +75,12 @@ const evenNumbers = numbers.filter(number => number % 2 === 0);
 console.log(evenNumbers);
 ```
 
-### Console
+#### Console
 ```console
 [2, 4, 6, 8, 10]
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.filterX = function (callback) {
   const newArray = [];
@@ -108,12 +108,12 @@ const sum = numbers.reduce(function (accumulator, currentValue) {
 console.log(sum);
 ```
 
-### Console
+#### Console
 ```console
 15
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.reduceX = function (callback, initialValue) {
   let accumulator = initialValue !== undefined ? initialValue : this[0];
@@ -133,7 +133,7 @@ const sum = numbers.reduceX(function (accumulator, currentValue) {
 console.log(sum);
 ```
 
-### Explanation of callback
+#### Explanation of callback
 The reduce method in JavaScript allows flexibility by providing four parameters to the `callback` function. Each parameter serves a specific purpose, enabling you to customize how the reduction operation is performed. Here's a breakdown of the four parameters:
 
 1. `accumulator`: The accumulator is the accumulated result of the previous iterations. It starts with the initial value if one is provided or the first element of the array if an initial value is not provided. The accumulator is updated in each iteration based on the return value of the callback function.
@@ -157,12 +157,12 @@ const concatenatedArray = array1.concat(array2);
 console.log(concatenatedArray);
 ```
 
-### Console
+#### Console
 ```console
 [1, 2, 3, 4, 5, 6]
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.concatX = function () {
   const newArray = [...this];
@@ -197,12 +197,12 @@ const foundNumber = numbers.find(function(element) {
 console.log(foundNumber);
 ```
 
-### Console
+#### Console
 ```console
 3
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.findX = function(callback, thisArg) {
     for (let i = 0; i < this.length; i++) {
@@ -232,12 +232,12 @@ const flatArray = nestedArray.flat(2);
 console.log(flatArray);
 ```
 
-### Console
+#### Console
 ```console
 [1, 2, 3, 4, 5]
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.flatX = function(depth = 1) {
     const flattenedArray = [];
@@ -275,12 +275,12 @@ const result = array.flatMap(function (value) {
 console.log(result);
 ```
 
-### Console
+#### Console
 ```console
 [2, 3, 4, 6, 6, 9]
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.flatMapX = function(callback, thisArg) {
     return this.reduce(function(flatArray, currentElement, currentIndex, array) {
@@ -315,12 +315,12 @@ const slicedArray = originalArray.slice(1, 4);
 console.log(slicedArray);
 ```
 
-### Console
+#### Console
 ```console
 [2, 3, 4]
 ```
 
-### Polyfill
+#### Polyfill
 ```javascript
 Array.prototype.slice = function(start, end) {
     start = typeof start !== 'undefined' ? start : 0;
