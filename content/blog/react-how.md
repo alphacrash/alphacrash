@@ -1,5 +1,5 @@
 ---
-title: "React - How"
+title: "React - How it works"
 excerpt: "How React Works"
 date: "2023-11-15"
 coverImage: "/assets/blog/hello-world/cover.jpg"
