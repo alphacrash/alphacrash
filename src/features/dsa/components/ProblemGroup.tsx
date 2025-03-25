@@ -1,7 +1,15 @@
-import { ProblemGroupProps } from "../../types";
-import ExpandDirection from "../common/ExpandDirection";
+import { Problem } from "@site/src/types";
 import ProblemRow from "./ProblemRow";
-import ProgressBar from "./ProgressBar";
+import ExpandDirection from "./ui/ExpandDirection";
+import ProgressBar from "./ui/ProgressBar";
+
+interface ProblemGroupProps {
+  completedProblems: Set<string>;
+  setCompletedProblems: React.Dispatch<React.SetStateAction<Set<string>>>;
+  expandedPatterns: Set<string>;
+  setExpandedPatterns: React.Dispatch<React.SetStateAction<Set<string>>>;
+  groupedProblems: Record<string, Problem[]>;
+}
 
 const ProblemGroup = ({
   completedProblems,
@@ -31,7 +39,10 @@ const ProblemGroup = ({
     const isExpanded = expandedPatterns.has(pattern);
 
     return (
-      <div key={pattern} className="px-4 pt-3 border-solid border-gray-200 rounded-md">
+      <div
+        key={pattern}
+        className="px-4 pt-3 border-solid border-gray-200 rounded-md"
+      >
         <div
           className="flex items-baseline cursor-pointer gap-2"
           onClick={() => togglePattern(pattern)}

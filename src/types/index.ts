@@ -5,6 +5,13 @@ export interface BaseProps {
   onClick?: () => void;
 }
 
+export type Collection =
+  | "All"
+  | "alpha"
+  | "Blind75"
+  | "Neetcode150"
+  | "Neetcode250";
+
 export interface Problem {
   alpha?: boolean;
   neetcode250?: boolean;
@@ -17,4 +24,7 @@ export interface Problem {
   code: string;
 }
 
-export type Collection = "All" | "alpha" | "Blind75" | "Neetcode150" | "Neetcode250";
+export interface ProgressBarProps {
+  progress: number;
+  isFull: boolean;
+}
