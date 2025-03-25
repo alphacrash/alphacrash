@@ -1,5 +1,5 @@
-import { ProblemGroupProps } from "../../types";
-import ExpandDirection from "../common/ExpandDirection";
+import { ProblemGroupProps } from "../types";
+import ExpandDirection from "./ui/ExpandDirection";
 import ProblemRow from "./ProblemRow";
 import ProgressBar from "./ProgressBar";
 
@@ -31,7 +31,10 @@ const ProblemGroup = ({
     const isExpanded = expandedPatterns.has(pattern);
 
     return (
-      <div key={pattern} className="px-4 pt-3 border-solid border-gray-200 rounded-md">
+      <div
+        key={pattern}
+        className="px-4 pt-3 border-solid border-gray-200 rounded-md"
+      >
         <div
           className="flex items-baseline cursor-pointer gap-2"
           onClick={() => togglePattern(pattern)}

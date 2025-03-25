@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Collection, Problem, ProblemListProps } from "../types";
 import { filterProblems } from "../utils";
 import ProblemGroup from "./ProblemGroup";
-import ProgressBar from "./ProblemGroup/ProgressBar";
+import ProgressBar from "./ProgressBar";
 
 const ProblemList: React.FC<ProblemListProps> = ({ problems }) => {
   const [completedProblems, setCompletedProblems] = useState<Set<string>>(

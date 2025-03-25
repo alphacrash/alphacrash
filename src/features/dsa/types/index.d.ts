@@ -1,18 +1,38 @@
-// Type definitions for feature - DSA
+export interface BaseProps {
+  isChecked?: boolean;
+  isExpanded?: boolean;
+  difficulty?: string;
+  onClick?: () => void;
+}
 
-export type Collection = "All" | "alpha" | "Blind75" | "Neetcode150" | "Neetcode250";
+export type Collection =
+  | "All"
+  | "alpha"
+  | "Blind75"
+  | "Neetcode150"
+  | "Neetcode250";
+
+export interface CheckmarkProps {
+  isChecked: boolean;
+  onClick: () => void;
+}
+
+export interface DifficultyProps {
+  difficulty: string;
+}
+
+export interface ExpandDirectionProps {
+  isExpanded: boolean;
+}
 
 export interface Problem {
   alpha?: boolean;
   neetcode250?: boolean;
   neetcode150?: boolean;
   blind75?: boolean;
-  grind75?: boolean;
-  grind169?: boolean;
   problem: string;
   pattern: string;
   link: string;
-  video: string;
   difficulty: string;
   code: string;
 }
@@ -38,17 +58,4 @@ export interface ProblemRowProps {
 export interface ProgressBarProps {
   progress: number;
   isFull: boolean;
-}
-
-export interface CheckmarkProps {
-  isChecked: boolean;
-  onClick: () => void;
-}
-
-export interface DifficultyProps {
-  difficulty: string;
-}
-
-export interface ExpandDirectionProps {
-  isExpanded: boolean;
 }
