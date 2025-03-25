@@ -1,11 +1,15 @@
+import { Collection, Problem } from "@site/src/types";
+import { filterProblems } from "@site/src/utils";
 import { ChevronDown, ChevronUp, Filter } from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { Collection, Problem, ProblemListProps } from "../types";
-import { filterProblems } from "../utils";
+import { useEffect, useState } from "react";
 import ProblemGroup from "./ProblemGroup";
-import ProgressBar from "./ProgressBar";
+import ProgressBar from "./ui/ProgressBar";
 
-const ProblemList: React.FC<ProblemListProps> = ({ problems }) => {
+interface ProblemListProps {
+  problems: Problem[];
+}
+
+const ProblemList = ({ problems }: ProblemListProps) => {
   const [completedProblems, setCompletedProblems] = useState<Set<string>>(
     new Set()
   );
@@ -57,8 +61,7 @@ const ProblemList: React.FC<ProblemListProps> = ({ problems }) => {
   ).length;
   const overallProgress =
     totalProblems === 0 ? 0 : (completedCount / totalProblems) * 100;
-  const allPatternsExpanded =
-    expandedPatterns.size === Object.keys(groupedProblems).length;
+  const isAnyPatternExpanded = expandedPatterns?.size > 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -88,7 +91,7 @@ const ProblemList: React.FC<ProblemListProps> = ({ problems }) => {
               onClick={toggleAllPatterns}
               className="cursor-pointer py-3 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border-solid border-gray-200 bg-white text-gray-800 hover:bg-gray-50 focus:outline-hidden focus:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none dark:bg-neutral-800 dark:border-neutral-700 dark:text-white dark:hover:bg-neutral-700 dark:focus:bg-neutral-700"
             >
-              {allPatternsExpanded ? (
+              {isAnyPatternExpanded ? (
                 <>
                   <ChevronUp className="w-5 h-5" />
                   Collapse

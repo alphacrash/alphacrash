@@ -1,8 +1,14 @@
 import Link from "@docusaurus/Link";
+import { Problem } from "@site/src/types";
 import { useEffect, useState } from "react";
-import { ProblemRowProps } from "../types";
 import Checkmark from "./ui/Checkmark";
 import Difficulty from "./ui/Difficulty";
+
+interface ProblemRowProps {
+  completedProblems: Set<string>;
+  setCompletedProblems: React.Dispatch<React.SetStateAction<Set<string>>>;
+  problem: Problem;
+}
 
 const ProblemRow = ({
   completedProblems,

@@ -1,7 +1,15 @@
-import { ProblemGroupProps } from "../types";
-import ExpandDirection from "./ui/ExpandDirection";
+import { Problem } from "@site/src/types";
 import ProblemRow from "./ProblemRow";
-import ProgressBar from "./ProgressBar";
+import ExpandDirection from "./ui/ExpandDirection";
+import ProgressBar from "./ui/ProgressBar";
+
+interface ProblemGroupProps {
+  completedProblems: Set<string>;
+  setCompletedProblems: React.Dispatch<React.SetStateAction<Set<string>>>;
+  expandedPatterns: Set<string>;
+  setExpandedPatterns: React.Dispatch<React.SetStateAction<Set<string>>>;
+  groupedProblems: Record<string, Problem[]>;
+}
 
 const ProblemGroup = ({
   completedProblems,

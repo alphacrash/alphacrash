@@ -1,17 +1,11 @@
-import { DifficultyProps } from "../../types";
+import { getDifficultyClass } from "@site/src/utils";
 
-const Difficulty = ({ difficulty }: DifficultyProps) => {
-  const difficultyColors = {
-    Easy: "text-green-600",
-    Medium: "text-yellow-500",
-    Hard: "text-red-600",
-  };
+interface DifficultyProps {
+  difficulty: string;
+}
 
-  return (
-    <div className={difficultyColors[difficulty] || "text-gray-500"}>
-      {difficulty}
-    </div>
-  );
-};
+const Difficulty = ({ difficulty }: DifficultyProps) => (
+  <div className={getDifficultyClass(difficulty)}>{difficulty}</div>
+);
 
 export default Difficulty;
