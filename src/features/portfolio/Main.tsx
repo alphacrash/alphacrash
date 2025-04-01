@@ -1,9 +1,7 @@
-import BlurText from "./components/react-bits/BlurText";
 import FadeContent from "./components/react-bits/FadeContent";
 import SplitText from "./components/react-bits/SplitText";
 import Threads from "./components/react-bits/Threads";
 import SocialLink from "./components/SocialLink";
-import { socials } from "./data";
 
 const Main = () => {
   return (
@@ -12,7 +10,7 @@ const Main = () => {
         <div>
           <SplitText
             text="Hello!"
-            className="text-6xl text-blue-500 font-semibold"
+            className="text-3xl text-blue-500 font-semibold"
             delay={10}
             animationFrom={{ opacity: 0, transform: "translate3d(0,50px,0)" }}
             animationTo={{ opacity: 1, transform: "translate3d(0,0,0)" }}
@@ -51,18 +49,11 @@ const Main = () => {
               or follow me on
               <SocialLink name="github" url="https://github.com/alphacrash/" />
             </div>
+            <p className="text-lgl text-gray-500">
+              Built this site for my own practice and to help others with DSA,
+              SQL, and System Design. 🚀
+            </p>
           </FadeContent>
-        </div>
-
-        <div className="my-4">
-          <BlurText
-            text="Built this site for my own practice and to help others with DSA, SQL, and System Design. 🚀"
-            delay={30}
-            animateBy="words"
-            direction="bottom"
-            onAnimationComplete={() => {}}
-            className="text-xl text-gray-500 dark:text-gray-400"
-          />
         </div>
       </div>
       <div className="w-full flex justify-center items-center mt-8">
