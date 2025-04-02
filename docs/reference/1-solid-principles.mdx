@@ -1,0 +1,407 @@
+---
+sidebar_position: 1
+---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# SOLID Principles
+
+SOLID is an acronym for five object-oriented design principes (OOP) by Robert C. Martin.
+Adopting this practices helps in reducing code smell, refactoring of code, etc.
+
+* **S** - Single Responsibility
+* **O** - Open-Closed
+* **L** - Liskov Substitution
+* **I** - Interface Segregation
+* **D** - Dependency Inversion
+
+<Tabs defaultValue="single-responsibility">
+  <TabItem value="single-responsibility" label="Single Responsibility" default>
+
+  :::info[Single Responsibility Principle]
+  A class should have only one reason to change.
+  :::
+
+  This means that a class should have only one responsibility or purpose.
+
+  ❌ **Bad Example (Violates SRP)**
+
+  This Employee class handles multiple responsibilities (employee details & salary calculations).
+
+  ```java title=""
+  class Employee {
+    private String name;
+    private double salary;
+
+    public Employee(String name, double salary) {
+        this.name = name;
+        this.salary = salary;
+    }
+
+    public void printDetails() {
+        System.out.println("Name: " + name + ", Salary: " + salary);
+    }
+
+    public double calculateBonus() {
+        return salary * 0.10;
+    }
+  }
+  ```
+
+  🔴 **Problem**
+  * The class has two reasons to change:
+    * If employee details change.
+    * If salary calculation logic changes.
+  * Breaks SRP, making it harder to maintain.
+
+  <br />
+  <br />
+
+  ✅ **Good Example (Follows SRP)**
+
+  We separate concerns into two classes.
+
+  ```java title=""
+  class Employee {
+    private String name;
+    private double salary;
+
+    public Employee(String name, double salary) {
+        this.name = name;
+        this.salary = salary;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public double getSalary() {
+        return salary;
+    }
+  }
+
+  class SalaryCalculator {
+      public double calculateSalary(Employee employee) {
+          return employee.getSalary() * 0.1;
+      }
+  }
+  ```
+
+  ✅ **Why is this better?**
+  * `Employee` only manages employee data.
+  * `SalaryCalculator` only handles salary calculations.
+  * Each class has a single responsibility → Easier to maintain & extend.
+
+  </TabItem>
+  <TabItem value="open-closed" label="Open Closed">
+
+  :::info[Open Closed]
+  A class should be open for extension but closed for modification.
+  :::
+
+  This means that we should be able to add new functionality without changing existing code. This helps prevent breaking existing functionality and makes the system more maintainable.
+
+  ❌ **Bad Example (Violates Open/Closed Principle)**
+
+  ```java title=""
+  class DiscountCalculator {
+    public double calculateDiscount(String customerType, double amount) {
+        if (customerType.equals("Regular")) {
+            return amount * 0.1;
+        } else if (customerType.equals("Premium")) {
+            return amount * 0.2;
+        }
+        return 0;
+    }
+  }
+  ```
+
+  🔴 **Problem**
+  Everytime we add a new customer type, we have to modify existing code, which violates the open/closed principle.
+
+  <br />
+  <br />
+
+  ✅ **Good Example (Follows Open/Closed Principle)**
+
+  We will use polymorphism to extend functionality without modifying existing code.
+
+  ```java title=""
+  interface DiscountStrategy {
+    double applyDiscount(double amount);
+  }
+
+  class RegularDiscountStrategy implements DiscountStrategy {
+      public double applyDiscount(double amount) {
+          return amount * 0.1;
+      }
+  }
+
+  class PremiumDiscountStrategy implements DiscountStrategy {
+      public double applyDiscount(double amount) {
+          return amount * 0.2;
+      }
+  }
+
+  class DiscountCalculator {
+      public double calculateDiscount(DiscountStrategy strategy, double amount) {
+          return strategy.applyDiscount(amount);
+      }
+  }
+
+  public class Main {
+      public static void main(String[] args) {
+          DiscountCalculator calculator = new DiscountCalculator();
+          DiscountStrategy regularStrategy = new RegularDiscountStrategy();
+          DiscountStrategy premiumStrategy = new PremiumDiscountStrategy();
+
+          System.out.println("Regular discount: " + calculator.calculateDiscount(regularStrategy, amount));
+          System.out.println("Premium discount: " + calculator.calculateDiscount(premiumStrategy, amount));
+      }
+  }
+  ```
+
+  ✅ **Why is this better?**
+  * We can add new discount strategies (e.g. `GoldCustomerDiscount`) without modifying `DiscountCalculator`.
+  * Follows Open/Closed Principle by making it open for extension but closed for modification.
+  * Improves maintainability and scalability.
+
+  </TabItem>
+  <TabItem value="liskov-substitution" label="Liskov Substitution">
+
+  :::info[Liskov Substitution]
+  Subtypes must be substitutable for their base types without altering the correctness of the program.
+  :::
+
+  This means that if a class inherits from another, it should be able to replace its parent without breaking the behavior of the system.
+
+  ❌ **Bad Example (Violates LSP)**
+
+  Let's say we have a `Bird` class and a `Penguin` class that extends it.
+
+  ```java title=""
+  class Bird {
+    void fly() {
+        System.out.println("Bird is flying");
+    }
+  }
+
+  class Sparrow extends Bird {
+      // Inherits fly() method correctly
+  }
+
+  class Penguin extends Bird {
+      // Penguins cannot fly, but they inherit fly() method
+  }
+  ```
+
+  🔴 **Problem**
+  If we try to substitute `Penguin` for `Bird`, it breaks the expected behavior because penguins cannot fly. This violates LSP.
+
+  <br />
+  <br />
+
+  ✅ **Good Example (Follows LSP)**
+
+  To fix this, we separate flying and non-flying birds.
+
+  ```java title=""
+  abstract class Bird {
+    abstract void eat();
+  }
+
+  interface Flyable {
+      void fly();
+  }
+
+  class Sparrow extends Bird implements Flyable {
+      void eat() {
+          System.out.println("Sparrow eats seeds.");
+      }
+
+      public void fly() {
+          System.out.println("Sparrow flies.");
+      }
+  }
+
+  class Penguin extends Bird {
+      void eat() {
+          System.out.println("Penguin eats fish.");
+      }
+  }
+  ```
+
+  ✅ **Why is this better?**
+
+  * Now, `Penguin` doesn’t have an incorrect `fly()` method.
+  * We can substitute any `Bird` without worrying about incorrect behavior.
+  * Follows Liskov Substitution Principle, making the system more flexible and maintainable.
+
+  </TabItem>
+  <TabItem value="interface-segregation" label="Interface Segregation">
+
+  :::info[Interface Segregation]
+  A class should not be forced to implement interfaces it does not use.
+  :::
+
+  Don't force a class to implement methods it doesn't use, instead, create smaller, specific interfaces.
+
+  ❌ **Bad Example (Violates ISP)**
+
+  Suppose we have a Worker interface that includes multiple responsibilities.
+
+  ```java title=""
+  interface Worker {
+    void work();
+    void eat();
+  }
+
+  class Robot implements Worker {
+      public void work() {
+          System.out.println("Robot is working.");
+      }
+
+      public void eat() {
+          throw new UnsupportedOperationException("Robots do not eat");
+      }
+  }
+  ```
+
+  🔴 **Problem**
+  * The Robot class is forced to implement eat(), even though it doesn’t need it.
+  * This violates ISP because the interface has unrelated responsibilities.
+
+  <br />
+  <br />
+
+  ✅ **Good Example (Follows ISP)**
+
+  To fix this, we split the interface into smaller, more specific ones.
+
+  ```java title=""
+  interface Worker {
+    void work();
+  }
+
+  interface Eatable {
+      void eat();
+  }
+
+  class Human implements Worker, Eatable {
+      public void work() {
+          System.out.println("Human is working.");
+      }
+
+      public void eat() {
+          System.out.println("Human is eating.");
+      }
+  }
+
+  class Robot implements Worker {
+      public void work() {
+          System.out.println("Robot is working.");
+      }
+  }
+  ```
+
+  ✅ **Why is this better?**
+  * `RobotWorker` only implements `Workable`, so no unused methods.
+  * `HumanWorker` can implement both `Workable` and `Eatable` as needed.
+  * Follows Interface Segregation Principle, making the design clean and maintainable.
+
+  </TabItem>
+  <TabItem value="dependency-inversion" label="Dependency Inversion">
+
+  :::info[Dependency Inversion]
+  Depend on abstractions, not on concrete classes.
+  :::
+
+  High-level modules should depend on abstractions, not concrete implementations, to reduce coupling and increase flexibility.
+
+  ❌ **Bad Example (Violates DIP)**
+
+  ```java title=""
+  class Keyboard {
+    void type() {
+        System.out.println("Typing on the keyboard...");
+    }
+  }
+
+  class Mouse {
+      void click() {
+          System.out.println("Clicking the mouse...");
+      }
+  }
+
+  class WindowsComputer {
+      private Keyboard keyboard;
+      private Mouse mouse;
+
+      public WindowsComputer(Keyboard keyboard, Mouse mouse) {
+          this.keyboard = keyboard;
+          this.mouse = mouse;
+      }
+
+      public void useComputer() {
+          keyboard.type();
+          mouse.click();
+      }
+  }
+  ```
+
+  🔴 **Problem**
+  * `WindowsComputer` is tightly coupled to `Keyboard` and `Mouse`.
+  * If we need a new input device (e.g. `Touchpad`), we must modify `WindowsComputer`.
+
+  <br />
+  <br />
+
+  ✅ **Good Example  (Follows DIP)**
+
+  ```java title=""
+  interface InputDevice {
+    void input();
+  }
+
+  class Keyboard implements InputDevice {
+      public void input() {
+          System.out.println("Typing...");
+      }
+  }
+
+  class Mouse implements InputDevice {
+      public void input() {
+          System.out.println("Clicking...");
+      }
+  }
+
+  class Computer {
+      private InputDevice inputDevice;
+
+      public Computer(InputDevice inputDevice) {
+          this.inputDevice = inputDevice;
+      }
+
+      public void useInputDevice() {
+          inputDevice.input();
+      }
+  }
+
+  public class Main {
+      public static void main(String[] args) {
+          Computer computerWithKeyboard = new Computer(new Keyboard());
+          Computer computerWithMouse = new Computer(new Mouse());
+
+          computerWithKeyboard.useInputDevice();
+          computerWithMouse.useInputDevice();
+      }
+  }
+  ```
+  
+  ✅ **Why is this better?**
+  * Computer depends on `InputDevice` (an abstraction) instead of concrete classes.
+  * We can easily switch input devices (e.g., `Touchpad`) without modifying `Computer`.
+  * Follows Dependency Inversion Principle, making it flexible and extendable.
+
+  </TabItem>
+</Tabs>
