@@ -7,9 +7,10 @@ import ProgressBar from "./ui/ProgressBar";
 
 interface ProblemListProps {
   problems: Problem[];
+  collection: Collection;
 }
 
-const ProblemList = ({ problems }: ProblemListProps) => {
+const ProblemList = ({ problems, collection }: ProblemListProps) => {
   const [completedProblems, setCompletedProblems] = useState<Set<string>>(
     new Set()
   );
@@ -17,7 +18,7 @@ const ProblemList = ({ problems }: ProblemListProps) => {
     new Set()
   );
   const [selectedCollection, setSelectedCollection] =
-    useState<Collection>("Neetcode150");
+    useState<Collection>(collection);
 
   useEffect(() => {
     const saved = localStorage.getItem("completedProblems");
