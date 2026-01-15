@@ -7,7 +7,7 @@ export default function Page() {
         alphacrash
       </h1>
       <p className="mb-8">
-        {`Software Engineer, Open Source Contributor, and Tech Enthusiast.`}
+        {`Software Engineer.`}
       </p>
       <div className="my-8">
         <BlogPosts />

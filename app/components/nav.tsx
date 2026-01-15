@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 
 const navItems = {
   '/': {
-    name: 'home',
+    name: '~/',
   },
 }
 
