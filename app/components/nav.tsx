@@ -7,9 +7,6 @@ const navItems = {
   '/': {
     name: '~/',
   },
-  '/minecraft': {
-    name: 'minecraft',
-  },
 }
 
 export function Navbar() {

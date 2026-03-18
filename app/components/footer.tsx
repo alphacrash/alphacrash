@@ -41,15 +41,6 @@ export default function Footer() {
             <p className="ml-2 h-7">linkedin</p>
           </a>
         </li>
-        <li>
-          <a
-            className="flex items-center transition-all hover:text-neutral-800"
-            href="/minecraft"
-          >
-            <ArrowIcon />
-            <p className="ml-2 h-7">minecraft</p>
-          </a>
-        </li>
       </ul>
     </footer>
   )
