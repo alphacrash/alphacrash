@@ -14,10 +14,10 @@ export const metadata: Metadata = {
     default: 'alphacrash',
     template: '%s | alphacrash',
   },
-  description: 'a blog by alphacrash',
+  description: 'a blog',
   openGraph: {
     title: 'alphacrash',
-    description: 'a blog by alphacrash',
+    description: 'a blog',
     url: baseUrl,
     siteName: 'alphacrash',
     locale: 'en_US',

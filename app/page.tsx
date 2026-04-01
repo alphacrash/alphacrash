@@ -7,7 +7,7 @@ export default function Page() {
         alphacrash
       </h1>
       <p className="mb-8">
-        {`Software Engineer. Full-Stack Developer (Spring and React).`}
+        {`a blog`}
       </p>
       <div className="my-8">
         <BlogPosts />
