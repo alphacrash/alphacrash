@@ -611,8 +611,7 @@ export default function TasksView({
     if (syncModal === 'push') {
       const result = await syncPush(syncPassword, sortTasks(tasks))
       if (result.success) {
-        setSyncFeedback({ type: 'success', message: 'Pushed to cloud successfully!' })
-        setTimeout(() => closeSyncModal(), 1500)
+        closeSyncModal()
       } else {
         setSyncFeedback({ type: 'error', message: result.error ?? 'Push failed' })
       }
@@ -623,8 +622,7 @@ export default function TasksView({
           setSyncFeedback({ type: 'error', message: 'Cloud data is malformed' })
         } else {
           persist(result.data as Task[])
-          setSyncFeedback({ type: 'success', message: 'Pulled from cloud successfully!' })
-          setTimeout(() => closeSyncModal(), 1500)
+          closeSyncModal()
         }
       } else {
         setSyncFeedback({ type: 'error', message: result.error ?? 'Pull failed' })
