@@ -577,3 +577,78 @@ table {
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* Toolbar separator */
+.tasks-toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: #e5e5e5;
+  align-self: center;
+  margin: 0 0.15rem;
+}
+
+/* Sync buttons */
+.tasks-btn-sync {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.7rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+}
+
+.tasks-btn-push {
+  background: #166534;
+  color: #fff;
+  border-color: #166534;
+}
+
+.tasks-btn-push:hover:not(:disabled) {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+.tasks-btn-pull {
+  background: #1e40af;
+  color: #fff;
+  border-color: #1e40af;
+}
+
+.tasks-btn-pull:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* Modal overlay */
+.tasks-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.tasks-modal {
+  background: #fff;
+  border-radius: 0.625rem;
+  padding: 1.25rem 1.5rem;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.tasks-modal-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 0.35rem;
+}
+
+.tasks-modal-desc {
+  font-size: 0.78rem;
+  color: #737373;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { syncPush, syncPull } from './supabase'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -112,6 +113,15 @@ export default function TasksPage() {
   const [importError, setImportError] = useState<string | null>(null)
   const [importSuccess, setImportSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Sync state
+  const [syncModal, setSyncModal] = useState<'push' | 'pull' | null>(null)
+  const [syncPassword, setSyncPassword] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncFeedback, setSyncFeedback] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
 
   // Form state
   const [formTitle, setFormTitle] = useState('')
@@ -328,6 +338,49 @@ export default function TasksPage() {
     setFormComments('')
   }
 
+  // ------ Supabase Sync ------
+  function openSyncModal(mode: 'push' | 'pull') {
+    setSyncPassword('')
+    setSyncFeedback(null)
+    setSyncModal(mode)
+  }
+
+  function closeSyncModal() {
+    setSyncModal(null)
+    setSyncPassword('')
+    setSyncing(false)
+  }
+
+  async function handleSync() {
+    if (!syncModal || !syncPassword) return
+    setSyncing(true)
+    setSyncFeedback(null)
+
+    if (syncModal === 'push') {
+      const result = await syncPush(syncPassword, sortTasks(tasks))
+      if (result.success) {
+        setSyncFeedback({ type: 'success', message: 'Pushed to cloud successfully!' })
+        setTimeout(() => closeSyncModal(), 1500)
+      } else {
+        setSyncFeedback({ type: 'error', message: result.error ?? 'Push failed' })
+      }
+    } else {
+      const result = await syncPull(syncPassword)
+      if (result.success && Array.isArray(result.data)) {
+        if (!(result.data as unknown[]).every(isValidTask)) {
+          setSyncFeedback({ type: 'error', message: 'Cloud data is malformed' })
+        } else {
+          persist(result.data as Task[])
+          setSyncFeedback({ type: 'success', message: 'Pulled from cloud successfully!' })
+          setTimeout(() => closeSyncModal(), 1500)
+        }
+      } else {
+        setSyncFeedback({ type: 'error', message: result.error ?? 'Pull failed' })
+      }
+    }
+    setSyncing(false)
+  }
+
   // ------ Render ------
   if (!loaded) {
     return (
@@ -374,6 +427,22 @@ export default function TasksPage() {
               className="tasks-hidden-input"
             />
           </label>
+          <span className="tasks-toolbar-separator" />
+          <button
+            className="tasks-btn tasks-btn-sync tasks-btn-push"
+            onClick={() => openSyncModal('push')}
+            disabled={tasks.length === 0}
+            id="sync-push-btn"
+          >
+            ↑ Push
+          </button>
+          <button
+            className="tasks-btn tasks-btn-sync tasks-btn-pull"
+            onClick={() => openSyncModal('pull')}
+            id="sync-pull-btn"
+          >
+            ↓ Pull
+          </button>
         </div>
       </div>
 
@@ -541,6 +610,77 @@ export default function TasksPage() {
               {p} — {PRIORITY_LABELS[p]}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Sync password modal */}
+      {syncModal && (
+        <div className="tasks-modal-overlay" onClick={closeSyncModal}>
+          <div
+            className="tasks-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="sync-modal-title"
+          >
+            <h3 id="sync-modal-title" className="tasks-modal-title">
+              {syncModal === 'push' ? '↑ Push to Cloud' : '↓ Pull from Cloud'}
+            </h3>
+            <p className="tasks-modal-desc">
+              {syncModal === 'push'
+                ? 'Upload your local tasks to Supabase. This will overwrite cloud data.'
+                : 'Download tasks from Supabase. This will replace your local data.'}
+            </p>
+            <div className="tasks-field">
+              <label className="tasks-label" htmlFor="sync-password">
+                Password
+              </label>
+              <input
+                id="sync-password"
+                type="password"
+                className="tasks-input"
+                placeholder="Enter sync password"
+                value={syncPassword}
+                onChange={(e) => setSyncPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && syncPassword) handleSync()
+                }}
+                autoFocus
+                disabled={syncing}
+              />
+            </div>
+            {syncFeedback && (
+              <div
+                className={`tasks-alert ${
+                  syncFeedback.type === 'success'
+                    ? 'tasks-alert-success'
+                    : 'tasks-alert-error'
+                }`}
+                style={{ marginTop: '0.5rem', marginBottom: 0 }}
+              >
+                {syncFeedback.message}
+              </div>
+            )}
+            <div className="tasks-form-actions" style={{ marginTop: '0.75rem' }}>
+              <button
+                className="tasks-btn tasks-btn-primary"
+                onClick={handleSync}
+                disabled={!syncPassword || syncing}
+              >
+                {syncing
+                  ? 'Syncing…'
+                  : syncModal === 'push'
+                    ? 'Push'
+                    : 'Pull'}
+              </button>
+              <button
+                className="tasks-btn tasks-btn-ghost"
+                onClick={closeSyncModal}
+                disabled={syncing}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
