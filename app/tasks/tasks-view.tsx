@@ -120,17 +120,17 @@ function loadTasks(): Task[] {
       const status = mapStatus(t.status, completed)
       const subtasks = Array.isArray(t.subtasks)
         ? t.subtasks.map((st) => {
-            const stCompleted = Boolean(st.completed || st.status === 'Done')
-            return {
-              ...st,
-              id: getUniqueId(st.id),
-              status: mapStatus(st.status, stCompleted),
-              completed: stCompleted,
-              hasBlocker: Boolean(st.hasBlocker),
-              blocker: st.blocker ?? '',
-              comments: st.comments ?? '',
-            }
-          })
+          const stCompleted = Boolean(st.completed || st.status === 'Done')
+          return {
+            ...st,
+            id: getUniqueId(st.id),
+            status: mapStatus(st.status, stCompleted),
+            completed: stCompleted,
+            hasBlocker: Boolean(st.hasBlocker),
+            blocker: st.blocker ?? '',
+            comments: st.comments ?? '',
+          }
+        })
         : []
 
       return {
@@ -231,6 +231,9 @@ export default function TasksView({
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
 
+  // Subtask expand state
+  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set())
+
   // Sync state
   const [syncModal, setSyncModal] = useState<'push' | 'pull' | null>(null)
   const [syncPassword, setSyncPassword] = useState('')
@@ -316,30 +319,30 @@ export default function TasksView({
       updatedTasks = tasks.map((t) =>
         t.id === editingId
           ? {
-              ...t,
-              title: formTitle.trim(),
-              priority: formPriority,
-              order: newGroupSize + 1,
-              hasBlocker: formBlocker,
-              blocker: formBlocker ? formBlockerText.trim() : '',
-              comments: formComments.trim(),
-              status: formStatus,
-              completed: isDone,
-            }
+            ...t,
+            title: formTitle.trim(),
+            priority: formPriority,
+            order: newGroupSize + 1,
+            hasBlocker: formBlocker,
+            blocker: formBlocker ? formBlockerText.trim() : '',
+            comments: formComments.trim(),
+            status: formStatus,
+            completed: isDone,
+          }
           : t
       )
     } else {
       updatedTasks = tasks.map((t) =>
         t.id === editingId
           ? {
-              ...t,
-              title: formTitle.trim(),
-              hasBlocker: formBlocker,
-              blocker: formBlocker ? formBlockerText.trim() : '',
-              comments: formComments.trim(),
-              status: formStatus,
-              completed: isDone,
-            }
+            ...t,
+            title: formTitle.trim(),
+            hasBlocker: formBlocker,
+            blocker: formBlocker ? formBlockerText.trim() : '',
+            comments: formComments.trim(),
+            status: formStatus,
+            completed: isDone,
+          }
           : t
       )
     }
@@ -395,6 +398,19 @@ export default function TasksView({
     setDeleteTarget(null)
   }
 
+  // ------ Subtask Expand Toggle ------
+  function toggleSubtaskExpand(id: string) {
+    setExpandedSubtasks((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
   // ------ Subtask Handlers ------
   function handleAddSubtask(
     taskId: string,
@@ -431,14 +447,14 @@ export default function TasksView({
       const list = (t.subtasks ?? []).map((st) =>
         st.id === subtaskId
           ? {
-              ...st,
-              title: data.title.trim(),
-              hasBlocker: data.hasBlocker,
-              blocker: data.hasBlocker ? data.blocker.trim() : '',
-              comments: data.comments.trim(),
-              status: data.status,
-              completed: isDone,
-            }
+            ...st,
+            title: data.title.trim(),
+            hasBlocker: data.hasBlocker,
+            blocker: data.hasBlocker ? data.blocker.trim() : '',
+            comments: data.comments.trim(),
+            status: data.status,
+            completed: isDone,
+          }
           : st
       )
       return { ...t, subtasks: list }
@@ -910,75 +926,27 @@ export default function TasksView({
                                     onCancel={() => setEditingSubtask(null)}
                                   />
                                 ) : (
-                                  <div key={st.id} className={`tasks-subtask-item ${st.completed ? 'completed' : ''}`}>
-                                    <span className="tasks-id-badge tasks-subtask-id" title={`Subtask ID: #${st.id}`}>
-                                      #{st.id}
-                                    </span>
-                                    <div className="tasks-subtask-content">
-                                      <span className={`tasks-subtask-title ${st.completed ? 'tasks-item-title-completed' : ''}`}>
-                                        {st.title}
-                                      </span>
-                                      {st.hasBlocker && (
-                                        <div className="tasks-item-blocker" style={{ fontSize: '0.72rem' }}>
-                                          <span className="tasks-blocker-icon">⚠</span>
-                                          <span>Blocker: {st.blocker || 'Blocked'}</span>
-                                        </div>
-                                      )}
-                                      {st.comments && (
-                                        <div className="tasks-item-comments" style={{ fontSize: '0.72rem' }}>
-                                          <span className="tasks-comments-icon">💬</span>
-                                          <span>{st.comments}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="tasks-item-actions">
-                                      <select
-                                        className="tasks-status-select"
-                                        style={{
-                                          backgroundColor: STATUS_COLORS[st.status ?? 'To Do'].bg,
-                                          color: STATUS_COLORS[st.status ?? 'To Do'].fg,
-                                          borderColor: STATUS_COLORS[st.status ?? 'To Do'].border,
-                                        }}
-                                        value={st.status ?? 'To Do'}
-                                        onChange={(e) => handleUpdateSubtaskStatus(task.id, st.id, e.target.value as TaskStatus)}
-                                      >
-                                        {TASK_STATUSES.map((s) => (
-                                          <option key={s} value={s}>{s}</option>
-                                        ))}
-                                      </select>
-
-                                      <div className="tasks-action-btns-row">
-                                        <button
-                                          className={`tasks-action-btn ${st.completed ? 'tasks-action-restore' : 'tasks-action-complete'}`}
-                                          onClick={() => handleToggleSubtaskComplete(task.id, st.id)}
-                                          title={st.completed ? 'Restore subtask' : 'Mark subtask complete'}
-                                        >
-                                          {st.completed ? '↩' : '✓'}
-                                        </button>
-                                        <button
-                                          className="tasks-action-btn tasks-action-edit"
-                                          onClick={() => setEditingSubtask({ taskId: task.id, subtask: st })}
-                                          title="Edit subtask"
-                                        >
-                                          ✎
-                                        </button>
-                                        <button
-                                          className="tasks-action-btn tasks-action-delete"
-                                          onClick={() =>
-                                            setDeleteTarget({
-                                              type: 'subtask',
-                                              taskId: task.id,
-                                              subtaskId: st.id,
-                                              title: st.title,
-                                            })
-                                          }
-                                          title="Delete subtask"
-                                        >
-                                          ✕
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
+                                  <SubtaskItem
+                                    key={st.id}
+                                    subtask={st}
+                                    taskId={task.id}
+                                    isExpanded={expandedSubtasks.has(st.id)}
+                                    onToggleExpand={() => toggleSubtaskExpand(st.id)}
+                                    onToggleComplete={() => handleToggleSubtaskComplete(task.id, st.id)}
+                                    onUpdateStatus={(status) => handleUpdateSubtaskStatus(task.id, st.id, status)}
+                                    onStartEdit={() => {
+                                      if (!expandedSubtasks.has(st.id)) toggleSubtaskExpand(st.id)
+                                      setEditingSubtask({ taskId: task.id, subtask: st })
+                                    }}
+                                    onDelete={() =>
+                                      setDeleteTarget({
+                                        type: 'subtask',
+                                        taskId: task.id,
+                                        subtaskId: st.id,
+                                        title: st.title,
+                                      })
+                                    }
+                                  />
                                 )
                               )}
 
@@ -992,9 +960,8 @@ export default function TasksView({
                                 className="tasks-add-subtask-btn"
                                 onClick={() => setAddingSubtaskId(task.id)}
                                 title="Add subtask"
-                                aria-label="Add subtask"
                               >
-                                +
+                                + Subtask
                               </button>
                             )}
                           </div>
@@ -1128,75 +1095,27 @@ export default function TasksView({
 
                     {Array.isArray(task.subtasks) &&
                       task.subtasks.map((st) => (
-                        <div key={st.id} className={`tasks-subtask-item ${st.completed ? 'completed' : ''}`}>
-                          <span className="tasks-id-badge tasks-subtask-id" title={`Subtask ID: #${st.id}`}>
-                            #{st.id}
-                          </span>
-                          <div className="tasks-subtask-content">
-                            <span className={`tasks-subtask-title ${st.completed ? 'tasks-item-title-completed' : ''}`}>
-                              {st.title}
-                            </span>
-                            {st.hasBlocker && (
-                              <div className="tasks-item-blocker" style={{ fontSize: '0.72rem' }}>
-                                <span className="tasks-blocker-icon">⚠</span>
-                                <span>Blocker: {st.blocker || 'Blocked'}</span>
-                              </div>
-                            )}
-                            {st.comments && (
-                              <div className="tasks-item-comments" style={{ fontSize: '0.72rem' }}>
-                                <span className="tasks-comments-icon">💬</span>
-                                <span>{st.comments}</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="tasks-item-actions">
-                            <select
-                              className="tasks-status-select"
-                              style={{
-                                backgroundColor: STATUS_COLORS[st.status ?? 'To Do'].bg,
-                                color: STATUS_COLORS[st.status ?? 'To Do'].fg,
-                                borderColor: STATUS_COLORS[st.status ?? 'To Do'].border,
-                              }}
-                              value={st.status ?? 'To Do'}
-                              onChange={(e) => handleUpdateSubtaskStatus(task.id, st.id, e.target.value as TaskStatus)}
-                            >
-                              {TASK_STATUSES.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                              ))}
-                            </select>
-
-                            <div className="tasks-action-btns-row">
-                              <button
-                                className={`tasks-action-btn ${st.completed ? 'tasks-action-restore' : 'tasks-action-complete'}`}
-                                onClick={() => handleToggleSubtaskComplete(task.id, st.id)}
-                                title={st.completed ? 'Restore subtask' : 'Mark subtask complete'}
-                              >
-                                {st.completed ? '↩' : '✓'}
-                              </button>
-                              <button
-                                className="tasks-action-btn tasks-action-edit"
-                                onClick={() => setEditingSubtask({ taskId: task.id, subtask: st })}
-                                title="Edit subtask"
-                              >
-                                ✎
-                              </button>
-                              <button
-                                className="tasks-action-btn tasks-action-delete"
-                                onClick={() =>
-                                  setDeleteTarget({
-                                    type: 'subtask',
-                                    taskId: task.id,
-                                    subtaskId: st.id,
-                                    title: st.title,
-                                  })
-                                }
-                                title="Delete subtask"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+                        <SubtaskItem
+                          key={st.id}
+                          subtask={st}
+                          taskId={task.id}
+                          isExpanded={expandedSubtasks.has(st.id)}
+                          onToggleExpand={() => toggleSubtaskExpand(st.id)}
+                          onToggleComplete={() => handleToggleSubtaskComplete(task.id, st.id)}
+                          onUpdateStatus={(status) => handleUpdateSubtaskStatus(task.id, st.id, status)}
+                          onStartEdit={() => {
+                            if (!expandedSubtasks.has(st.id)) toggleSubtaskExpand(st.id)
+                            setEditingSubtask({ taskId: task.id, subtask: st })
+                          }}
+                          onDelete={() =>
+                            setDeleteTarget({
+                              type: 'subtask',
+                              taskId: task.id,
+                              subtaskId: st.id,
+                              title: st.title,
+                            })
+                          }
+                        />
                       ))}
                   </div>
                 </div>
@@ -1283,11 +1202,10 @@ export default function TasksView({
             </div>
             {syncFeedback && (
               <div
-                className={`tasks-alert ${
-                  syncFeedback.type === 'success'
+                className={`tasks-alert ${syncFeedback.type === 'success'
                     ? 'tasks-alert-success'
                     : 'tasks-alert-error'
-                }`}
+                  }`}
                 style={{ marginTop: '0.5rem', marginBottom: 0 }}
               >
                 {syncFeedback.message}
@@ -1619,6 +1537,153 @@ function SubtaskForm({
         >
           Cancel
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SubtaskItem sub-component
+// ---------------------------------------------------------------------------
+
+function SubtaskItem({
+  subtask,
+  taskId,
+  isExpanded,
+  onToggleExpand,
+  onToggleComplete,
+  onUpdateStatus,
+  onStartEdit,
+  onDelete,
+}: {
+  subtask: Subtask
+  taskId: string
+  isExpanded: boolean
+  onToggleExpand: () => void
+  onToggleComplete: () => void
+  onUpdateStatus: (status: TaskStatus) => void
+  onStartEdit: () => void
+  onDelete: () => void
+}) {
+  const st = subtask
+
+  if (!isExpanded) {
+    return (
+      <div className={`tasks-subtask-item collapsed ${st.completed ? 'completed' : ''}`}>
+        <button
+          className="tasks-subtask-expand-btn"
+          onClick={onToggleExpand}
+          title="Expand subtask"
+          aria-label="Expand subtask"
+        >
+          <svg
+            className="tasks-subtask-chevron"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+        <span
+          className={`tasks-subtask-title ${st.completed ? 'tasks-item-title-completed' : ''}`}
+          onClick={onToggleExpand}
+          style={{ cursor: 'pointer' }}
+        >
+          {st.title}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`tasks-subtask-item expanded ${st.completed ? 'completed' : ''}`}>
+      <button
+        className="tasks-subtask-expand-btn expanded"
+        onClick={onToggleExpand}
+        title="Collapse subtask"
+        aria-label="Collapse subtask"
+      >
+        <svg
+          className="tasks-subtask-chevron"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
+      <span className="tasks-id-badge tasks-subtask-id" title={`Subtask ID: #${st.id}`}>
+        #{st.id}
+      </span>
+      <div className="tasks-subtask-content">
+        <span className={`tasks-subtask-title ${st.completed ? 'tasks-item-title-completed' : ''}`}>
+          {st.title}
+        </span>
+        {st.hasBlocker && (
+          <div className="tasks-item-blocker" style={{ fontSize: '0.72rem' }}>
+            <span className="tasks-blocker-icon">⚠</span>
+            <span>Blocker: {st.blocker || 'Blocked'}</span>
+          </div>
+        )}
+        {st.comments && (
+          <div className="tasks-item-comments" style={{ fontSize: '0.72rem' }}>
+            <span className="tasks-comments-icon">💬</span>
+            <span>{st.comments}</span>
+          </div>
+        )}
+      </div>
+      <div className="tasks-item-actions">
+        <select
+          className="tasks-status-select"
+          style={{
+            backgroundColor: STATUS_COLORS[st.status ?? 'To Do'].bg,
+            color: STATUS_COLORS[st.status ?? 'To Do'].fg,
+            borderColor: STATUS_COLORS[st.status ?? 'To Do'].border,
+          }}
+          value={st.status ?? 'To Do'}
+          onChange={(e) => onUpdateStatus(e.target.value as TaskStatus)}
+        >
+          {TASK_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+
+        <div className="tasks-action-btns-row">
+          <button
+            className={`tasks-action-btn ${st.completed ? 'tasks-action-restore' : 'tasks-action-complete'}`}
+            onClick={onToggleComplete}
+            title={st.completed ? 'Restore subtask' : 'Mark subtask complete'}
+          >
+            {st.completed ? '↩' : '✓'}
+          </button>
+          <button
+            className="tasks-action-btn tasks-action-edit"
+            onClick={onStartEdit}
+            title="Edit subtask"
+          >
+            ✎
+          </button>
+          <button
+            className="tasks-action-btn tasks-action-delete"
+            onClick={onDelete}
+            title="Delete subtask"
+          >
+            ✕
+          </button>
+        </div>
       </div>
     </div>
   )

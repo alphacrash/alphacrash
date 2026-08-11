@@ -889,29 +889,58 @@ table {
 
 /* Subtasks */
 .tasks-subtasks-container {
-  margin-top: 0.6rem;
-  padding-left: 0.6rem;
+  margin-top: 0.25rem;
+  padding-left: 0.4rem;
   border-left: 2px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.15rem;
 }
 
 .tasks-subtasks-header {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: #64748b;
-  margin-bottom: 0.1rem;
+  margin-bottom: 0.05rem;
 }
 
 .tasks-subtask-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
+  gap: 0.4rem;
+  padding: 0.15rem 0.35rem;
+  background: transparent;
+  border-radius: 0.25rem;
+  transition: background 0.12s ease;
+}
+
+.tasks-subtask-item:hover {
   background: #f8fafc;
-  border: 1px solid #f1f5f9;
-  border-radius: 0.35rem;
+}
+
+.tasks-subtask-expand-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  transition: color 0.12s;
+  flex-shrink: 0;
+}
+
+.tasks-subtask-expand-btn:hover {
+  color: #334155;
+}
+
+.tasks-subtask-chevron {
+  transition: transform 0.15s ease;
+}
+
+.tasks-subtask-expand-btn.expanded .tasks-subtask-chevron {
+  transform: rotate(90deg);
 }
 
 .tasks-subtask-item.completed {
@@ -941,31 +970,26 @@ table {
 
 .tasks-add-subtask-btn {
   align-self: flex-start;
-  width: 20px;
-  height: 20px;
-  border-radius: 9999px;
-  aspect-ratio: 1 / 1;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #64748b;
-  background: #ffffff;
-  border: 1.5px solid #cbd5e1;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #0284c7;
+  background: #f0f9ff;
+  border: 1px solid #e0f2fe;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0.2rem 0.55rem;
+  line-height: 1.2;
+  border-radius: 0.35rem;
   transition: all 0.15s ease;
   margin-top: 0.25rem;
-  padding: 0;
-  line-height: 1;
-  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .tasks-add-subtask-btn:hover {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #3b82f6;
-  transform: scale(1.1);
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
 }
 
 .tasks-subtask-form {
