@@ -7,6 +7,16 @@ import { syncPush, syncPull } from './supabase'
 // Types
 // ---------------------------------------------------------------------------
 
+interface Subtask {
+  id: string
+  title: string
+  hasBlocker: boolean
+  blocker: string
+  comments: string
+  status?: 'To Do' | 'In Progress' | 'On Hold' | 'Done'
+  completed?: boolean
+}
+
 interface Task {
   id: string
   title: string
@@ -17,6 +27,7 @@ interface Task {
   comments: string
   status?: 'To Do' | 'In Progress' | 'On Hold' | 'Done'
   completed?: boolean
+  subtasks?: Subtask[]
 }
 
 type Priority = Task['priority']
@@ -61,12 +72,25 @@ const STORAGE_KEY = 'alphacrash-tasks'
 // Helpers
 // ---------------------------------------------------------------------------
 
+function getAllUsedIds(tasks: Task[]): Set<string> {
+  const set = new Set<string>()
+  for (const t of tasks) {
+    if (t.id) set.add(t.id)
+    if (Array.isArray(t.subtasks)) {
+      for (const st of t.subtasks) {
+        if (st.id) set.add(st.id)
+      }
+    }
+  }
+  return set
+}
+
 function generateId(existingTasks: Task[] = []): string {
-  const existingIds = new Set(existingTasks.map((t) => t.id))
+  const usedIds = getAllUsedIds(existingTasks)
   let id = ''
   do {
     id = Math.floor(1000 + Math.random() * 9000).toString()
-  } while (existingIds.has(id))
+  } while (usedIds.has(id))
   return id
 }
 
@@ -78,22 +102,44 @@ function loadTasks(): Task[] {
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
     const usedIds = new Set<string>()
-    return (parsed as Task[]).map((t) => {
-      let id = t.id
-      if (!id || !/^\d{4}$/.test(id) || usedIds.has(id)) {
+
+    const getUniqueId = (id?: string) => {
+      let result = id
+      if (!result || !/^\d{4}$/.test(result) || usedIds.has(result)) {
         do {
-          id = Math.floor(1000 + Math.random() * 9000).toString()
-        } while (usedIds.has(id))
+          result = Math.floor(1000 + Math.random() * 9000).toString()
+        } while (usedIds.has(result))
       }
-      usedIds.add(id)
+      usedIds.add(result)
+      return result
+    }
+
+    return (parsed as Task[]).map((t) => {
+      const id = getUniqueId(t.id)
       const completed = Boolean(t.completed || t.status === 'Done')
       const status = mapStatus(t.status, completed)
+      const subtasks = Array.isArray(t.subtasks)
+        ? t.subtasks.map((st) => {
+            const stCompleted = Boolean(st.completed || st.status === 'Done')
+            return {
+              ...st,
+              id: getUniqueId(st.id),
+              status: mapStatus(st.status, stCompleted),
+              completed: stCompleted,
+              hasBlocker: Boolean(st.hasBlocker),
+              blocker: st.blocker ?? '',
+              comments: st.comments ?? '',
+            }
+          })
+        : []
+
       return {
         ...t,
         id,
         priority: mapPriority(t.priority),
         status,
         completed,
+        subtasks,
       }
     })
   } catch {
@@ -146,11 +192,13 @@ function isValidTask(t: unknown): t is Task {
   const obj = t as Record<string, unknown>
   const validP = PRIORITIES.includes(obj.priority as Priority) || ['P0', 'P1', 'P2', 'P3'].includes(obj.priority as string)
   const validS = typeof obj.status === 'undefined' || TASK_STATUSES.includes(obj.status as TaskStatus) || ['Paused', 'Yet to start'].includes(obj.status as string)
+  const validSub = typeof obj.subtasks === 'undefined' || Array.isArray(obj.subtasks)
   return (
     typeof obj.id === 'string' &&
     typeof obj.title === 'string' &&
     validP &&
     validS &&
+    validSub &&
     typeof obj.order === 'number' &&
     typeof obj.hasBlocker === 'boolean' &&
     typeof obj.blocker === 'string' &&
@@ -158,6 +206,10 @@ function isValidTask(t: unknown): t is Task {
     (typeof obj.completed === 'undefined' || typeof obj.completed === 'boolean')
   )
 }
+
+type DeleteTarget =
+  | { type: 'task'; id: string; title: string }
+  | { type: 'subtask'; taskId: string; subtaskId: string; title: string }
 
 // ---------------------------------------------------------------------------
 // Reusable Component
@@ -176,6 +228,9 @@ export default function TasksView({
   const [importSuccess, setImportSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+
   // Sync state
   const [syncModal, setSyncModal] = useState<'push' | 'pull' | null>(null)
   const [syncPassword, setSyncPassword] = useState('')
@@ -184,6 +239,10 @@ export default function TasksView({
     type: 'success' | 'error'
     message: string
   } | null>(null)
+
+  // Subtask UI state
+  const [addingSubtaskId, setAddingSubtaskId] = useState<string | null>(null)
+  const [editingSubtask, setEditingSubtask] = useState<{ taskId: string; subtask: Subtask } | null>(null)
 
   // Form state
   const [formTitle, setFormTitle] = useState('')
@@ -324,6 +383,105 @@ export default function TasksView({
       setEditingId(null)
       resetForm()
     }
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return
+    if (deleteTarget.type === 'task') {
+      handleDelete(deleteTarget.id)
+    } else {
+      handleDeleteSubtask(deleteTarget.taskId, deleteTarget.subtaskId)
+    }
+    setDeleteTarget(null)
+  }
+
+  // ------ Subtask Handlers ------
+  function handleAddSubtask(
+    taskId: string,
+    data: { title: string; hasBlocker: boolean; blocker: string; comments: string; status: TaskStatus }
+  ) {
+    const isDone = data.status === 'Done'
+    const newSubtask: Subtask = {
+      id: generateId(tasks),
+      title: data.title.trim(),
+      hasBlocker: data.hasBlocker,
+      blocker: data.hasBlocker ? data.blocker.trim() : '',
+      comments: data.comments.trim(),
+      status: data.status,
+      completed: isDone,
+    }
+
+    const updated = tasks.map((t) => {
+      if (t.id !== taskId) return t
+      const list = t.subtasks ?? []
+      return { ...t, subtasks: [...list, newSubtask] }
+    })
+    persist(updated)
+    setAddingSubtaskId(null)
+  }
+
+  function handleSaveSubtaskEdit(
+    taskId: string,
+    subtaskId: string,
+    data: { title: string; hasBlocker: boolean; blocker: string; comments: string; status: TaskStatus }
+  ) {
+    const isDone = data.status === 'Done'
+    const updated = tasks.map((t) => {
+      if (t.id !== taskId) return t
+      const list = (t.subtasks ?? []).map((st) =>
+        st.id === subtaskId
+          ? {
+              ...st,
+              title: data.title.trim(),
+              hasBlocker: data.hasBlocker,
+              blocker: data.hasBlocker ? data.blocker.trim() : '',
+              comments: data.comments.trim(),
+              status: data.status,
+              completed: isDone,
+            }
+          : st
+      )
+      return { ...t, subtasks: list }
+    })
+    persist(updated)
+    setEditingSubtask(null)
+  }
+
+  function handleToggleSubtaskComplete(taskId: string, subtaskId: string) {
+    const updated = tasks.map((t) => {
+      if (t.id !== taskId) return t
+      const list = (t.subtasks ?? []).map((st) => {
+        if (st.id !== subtaskId) return st
+        const isNowDone = !st.completed
+        return {
+          ...st,
+          completed: isNowDone,
+          status: isNowDone ? ('Done' as TaskStatus) : ('To Do' as TaskStatus),
+        }
+      })
+      return { ...t, subtasks: list }
+    })
+    persist(updated)
+  }
+
+  function handleUpdateSubtaskStatus(taskId: string, subtaskId: string, status: TaskStatus) {
+    const isDone = status === 'Done'
+    const updated = tasks.map((t) => {
+      if (t.id !== taskId) return t
+      const list = (t.subtasks ?? []).map((st) =>
+        st.id === subtaskId ? { ...st, status, completed: isDone } : st
+      )
+      return { ...t, subtasks: list }
+    })
+    persist(updated)
+  }
+
+  function handleDeleteSubtask(taskId: string, subtaskId: string) {
+    const updated = tasks.map((t) => {
+      if (t.id !== taskId) return t
+      return { ...t, subtasks: (t.subtasks ?? []).filter((st) => st.id !== subtaskId) }
+    })
+    persist(updated)
   }
 
   // ------ Move Up / Down ------
@@ -592,27 +750,52 @@ export default function TasksView({
         </div>
       )}
 
-      {/* Edit form */}
+      {/* Edit Task Modal */}
       {editingId && (
-        <div className="tasks-form-card">
-          <h2 className="tasks-form-heading">Edit Task</h2>
-          <TaskForm
-            title={formTitle}
-            priority={formPriority}
-            status={formStatus}
-            hasBlocker={formBlocker}
-            blockerText={formBlockerText}
-            comments={formComments}
-            onTitleChange={setFormTitle}
-            onPriorityChange={setFormPriority}
-            onStatusChange={setFormStatus}
-            onBlockerChange={setFormBlocker}
-            onBlockerTextChange={setFormBlockerText}
-            onCommentsChange={setFormComments}
-            onSubmit={handleSaveEdit}
-            onCancel={cancelEdit}
-            submitLabel="Save"
-          />
+        <div className="tasks-modal-overlay" onClick={cancelEdit}>
+          <div
+            className="tasks-modal tasks-modal-edit"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="edit-modal-title"
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.75rem',
+              }}
+            >
+              <h3 id="edit-modal-title" className="tasks-modal-title" style={{ margin: 0 }}>
+                Edit Task #{editingId}
+              </h3>
+              <button
+                className="tasks-alert-dismiss"
+                onClick={cancelEdit}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <TaskForm
+              title={formTitle}
+              priority={formPriority}
+              status={formStatus}
+              hasBlocker={formBlocker}
+              blockerText={formBlockerText}
+              comments={formComments}
+              onTitleChange={setFormTitle}
+              onPriorityChange={setFormPriority}
+              onStatusChange={setFormStatus}
+              onBlockerChange={setFormBlocker}
+              onBlockerTextChange={setFormBlockerText}
+              onCommentsChange={setFormComments}
+              onSubmit={handleSaveEdit}
+              onCancel={cancelEdit}
+              submitLabel="Save Changes"
+            />
+          </div>
         </div>
       )}
 
@@ -691,23 +874,6 @@ export default function TasksView({
                         <div className="tasks-item-content">
                           <div className="tasks-item-header">
                             <div className="tasks-item-title">{task.title}</div>
-                            <select
-                              className="tasks-status-select"
-                              style={{
-                                backgroundColor: STATUS_COLORS[task.status ?? 'To Do'].bg,
-                                color: STATUS_COLORS[task.status ?? 'To Do'].fg,
-                                borderColor: STATUS_COLORS[task.status ?? 'To Do'].border,
-                              }}
-                              value={task.status ?? 'To Do'}
-                              onChange={(e) => updateStatus(task.id, e.target.value as TaskStatus)}
-                              title="Change task status"
-                            >
-                              {TASK_STATUSES.map((st) => (
-                                <option key={st} value={st}>
-                                  {st}
-                                </option>
-                              ))}
-                            </select>
                           </div>
                           {task.hasBlocker && task.blocker && (
                             <div className="tasks-item-blocker">
@@ -727,35 +893,162 @@ export default function TasksView({
                               <span>{task.comments}</span>
                             </div>
                           )}
+
+                          {/* Subtasks Container */}
+                          <div className="tasks-subtasks-container">
+                            {Array.isArray(task.subtasks) && task.subtasks.length > 0 && (
+                              <div className="tasks-subtasks-header">
+                                Subtasks ({task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length})
+                              </div>
+                            )}
+
+                            {Array.isArray(task.subtasks) &&
+                              task.subtasks.map((st) =>
+                                editingSubtask?.taskId === task.id && editingSubtask?.subtask.id === st.id ? (
+                                  <SubtaskForm
+                                    key={st.id}
+                                    initial={st}
+                                    onSave={(data) => handleSaveSubtaskEdit(task.id, st.id, data)}
+                                    onCancel={() => setEditingSubtask(null)}
+                                  />
+                                ) : (
+                                  <div key={st.id} className={`tasks-subtask-item ${st.completed ? 'completed' : ''}`}>
+                                    <span className="tasks-id-badge tasks-subtask-id" title={`Subtask ID: #${st.id}`}>
+                                      #{st.id}
+                                    </span>
+                                    <div className="tasks-subtask-content">
+                                      <span className={`tasks-subtask-title ${st.completed ? 'tasks-item-title-completed' : ''}`}>
+                                        {st.title}
+                                      </span>
+                                      {st.hasBlocker && (
+                                        <div className="tasks-item-blocker" style={{ fontSize: '0.72rem' }}>
+                                          <span className="tasks-blocker-icon">⚠</span>
+                                          <span>Blocker: {st.blocker || 'Blocked'}</span>
+                                        </div>
+                                      )}
+                                      {st.comments && (
+                                        <div className="tasks-item-comments" style={{ fontSize: '0.72rem' }}>
+                                          <span className="tasks-comments-icon">💬</span>
+                                          <span>{st.comments}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="tasks-item-actions">
+                                      <select
+                                        className="tasks-status-select"
+                                        style={{
+                                          backgroundColor: STATUS_COLORS[st.status ?? 'To Do'].bg,
+                                          color: STATUS_COLORS[st.status ?? 'To Do'].fg,
+                                          borderColor: STATUS_COLORS[st.status ?? 'To Do'].border,
+                                        }}
+                                        value={st.status ?? 'To Do'}
+                                        onChange={(e) => handleUpdateSubtaskStatus(task.id, st.id, e.target.value as TaskStatus)}
+                                      >
+                                        {TASK_STATUSES.map((s) => (
+                                          <option key={s} value={s}>{s}</option>
+                                        ))}
+                                      </select>
+
+                                      <div className="tasks-action-btns-row">
+                                        <button
+                                          className={`tasks-action-btn ${st.completed ? 'tasks-action-restore' : 'tasks-action-complete'}`}
+                                          onClick={() => handleToggleSubtaskComplete(task.id, st.id)}
+                                          title={st.completed ? 'Restore subtask' : 'Mark subtask complete'}
+                                        >
+                                          {st.completed ? '↩' : '✓'}
+                                        </button>
+                                        <button
+                                          className="tasks-action-btn tasks-action-edit"
+                                          onClick={() => setEditingSubtask({ taskId: task.id, subtask: st })}
+                                          title="Edit subtask"
+                                        >
+                                          ✎
+                                        </button>
+                                        <button
+                                          className="tasks-action-btn tasks-action-delete"
+                                          onClick={() =>
+                                            setDeleteTarget({
+                                              type: 'subtask',
+                                              taskId: task.id,
+                                              subtaskId: st.id,
+                                              title: st.title,
+                                            })
+                                          }
+                                          title="Delete subtask"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              )}
+
+                            {addingSubtaskId === task.id ? (
+                              <SubtaskForm
+                                onSave={(data) => handleAddSubtask(task.id, data)}
+                                onCancel={() => setAddingSubtaskId(null)}
+                              />
+                            ) : (
+                              <button
+                                className="tasks-add-subtask-btn"
+                                onClick={() => setAddingSubtaskId(task.id)}
+                                title="Add subtask"
+                                aria-label="Add subtask"
+                              >
+                                +
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {/* Actions */}
                         <div className="tasks-item-actions">
-                          <button
-                            className="tasks-action-btn tasks-action-complete"
-                            onClick={() => toggleComplete(task.id)}
-                            aria-label="Mark complete"
-                            title="Mark complete"
+                          <select
+                            className="tasks-status-select"
+                            style={{
+                              backgroundColor: STATUS_COLORS[task.status ?? 'To Do'].bg,
+                              color: STATUS_COLORS[task.status ?? 'To Do'].fg,
+                              borderColor: STATUS_COLORS[task.status ?? 'To Do'].border,
+                            }}
+                            value={task.status ?? 'To Do'}
+                            onChange={(e) => updateStatus(task.id, e.target.value as TaskStatus)}
+                            title="Change task status"
                           >
-                            ✓
-                          </button>
-                          <button
-                            className="tasks-action-btn tasks-action-edit"
-                            onClick={() => startEdit(task)}
-                            aria-label="Edit task"
-                            title="Edit"
-                            disabled={editingId === task.id}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            className="tasks-action-btn tasks-action-delete"
-                            onClick={() => handleDelete(task.id)}
-                            aria-label="Delete task"
-                            title="Delete"
-                          >
-                            ✕
-                          </button>
+                            {TASK_STATUSES.map((st) => (
+                              <option key={st} value={st}>
+                                {st}
+                              </option>
+                            ))}
+                          </select>
+
+                          <div className="tasks-action-btns-row">
+                            <button
+                              className="tasks-action-btn tasks-action-complete"
+                              onClick={() => toggleComplete(task.id)}
+                              aria-label="Mark complete"
+                              title="Mark complete"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              className="tasks-action-btn tasks-action-edit"
+                              onClick={() => startEdit(task)}
+                              aria-label="Edit task"
+                              title="Edit"
+                              disabled={editingId === task.id}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              className="tasks-action-btn tasks-action-delete"
+                              onClick={() => setDeleteTarget({ type: 'task', id: task.id, title: task.title })}
+                              aria-label="Delete task"
+                              title="Delete"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )
@@ -813,23 +1106,6 @@ export default function TasksView({
                 <div className="tasks-item-content">
                   <div className="tasks-item-header">
                     <div className="tasks-item-title tasks-item-title-completed">{task.title}</div>
-                    <select
-                      className="tasks-status-select"
-                      style={{
-                        backgroundColor: STATUS_COLORS['Done'].bg,
-                        color: STATUS_COLORS['Done'].fg,
-                        borderColor: STATUS_COLORS['Done'].border,
-                      }}
-                      value={task.status ?? 'Done'}
-                      onChange={(e) => updateStatus(task.id, e.target.value as TaskStatus)}
-                      title="Change task status"
-                    >
-                      {TASK_STATUSES.map((st) => (
-                        <option key={st} value={st}>
-                          {st}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                   {task.hasBlocker && task.blocker && (
                     <div className="tasks-item-blocker">
@@ -843,26 +1119,128 @@ export default function TasksView({
                       <span>{task.comments}</span>
                     </div>
                   )}
+
+                  {/* Subtasks Container */}
+                  <div className="tasks-subtasks-container">
+                    {Array.isArray(task.subtasks) && task.subtasks.length > 0 && (
+                      <div className="tasks-subtasks-header">
+                        Subtasks ({task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length})
+                      </div>
+                    )}
+
+                    {Array.isArray(task.subtasks) &&
+                      task.subtasks.map((st) => (
+                        <div key={st.id} className={`tasks-subtask-item ${st.completed ? 'completed' : ''}`}>
+                          <span className="tasks-id-badge tasks-subtask-id" title={`Subtask ID: #${st.id}`}>
+                            #{st.id}
+                          </span>
+                          <div className="tasks-subtask-content">
+                            <span className={`tasks-subtask-title ${st.completed ? 'tasks-item-title-completed' : ''}`}>
+                              {st.title}
+                            </span>
+                            {st.hasBlocker && (
+                              <div className="tasks-item-blocker" style={{ fontSize: '0.72rem' }}>
+                                <span className="tasks-blocker-icon">⚠</span>
+                                <span>Blocker: {st.blocker || 'Blocked'}</span>
+                              </div>
+                            )}
+                            {st.comments && (
+                              <div className="tasks-item-comments" style={{ fontSize: '0.72rem' }}>
+                                <span className="tasks-comments-icon">💬</span>
+                                <span>{st.comments}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="tasks-item-actions">
+                            <select
+                              className="tasks-status-select"
+                              style={{
+                                backgroundColor: STATUS_COLORS[st.status ?? 'To Do'].bg,
+                                color: STATUS_COLORS[st.status ?? 'To Do'].fg,
+                                borderColor: STATUS_COLORS[st.status ?? 'To Do'].border,
+                              }}
+                              value={st.status ?? 'To Do'}
+                              onChange={(e) => handleUpdateSubtaskStatus(task.id, st.id, e.target.value as TaskStatus)}
+                            >
+                              {TASK_STATUSES.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+
+                            <div className="tasks-action-btns-row">
+                              <button
+                                className={`tasks-action-btn ${st.completed ? 'tasks-action-restore' : 'tasks-action-complete'}`}
+                                onClick={() => handleToggleSubtaskComplete(task.id, st.id)}
+                                title={st.completed ? 'Restore subtask' : 'Mark subtask complete'}
+                              >
+                                {st.completed ? '↩' : '✓'}
+                              </button>
+                              <button
+                                className="tasks-action-btn tasks-action-edit"
+                                onClick={() => setEditingSubtask({ taskId: task.id, subtask: st })}
+                                title="Edit subtask"
+                              >
+                                ✎
+                              </button>
+                              <button
+                                className="tasks-action-btn tasks-action-delete"
+                                onClick={() =>
+                                  setDeleteTarget({
+                                    type: 'subtask',
+                                    taskId: task.id,
+                                    subtaskId: st.id,
+                                    title: st.title,
+                                  })
+                                }
+                                title="Delete subtask"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
 
                 {/* Actions */}
                 <div className="tasks-item-actions">
-                  <button
-                    className="tasks-action-btn tasks-action-restore"
-                    onClick={() => toggleComplete(task.id)}
-                    aria-label="Restore task"
-                    title="Restore task to active"
+                  <select
+                    className="tasks-status-select"
+                    style={{
+                      backgroundColor: STATUS_COLORS['Done'].bg,
+                      color: STATUS_COLORS['Done'].fg,
+                      borderColor: STATUS_COLORS['Done'].border,
+                    }}
+                    value={task.status ?? 'Done'}
+                    onChange={(e) => updateStatus(task.id, e.target.value as TaskStatus)}
+                    title="Change task status"
                   >
-                    ↩
-                  </button>
-                  <button
-                    className="tasks-action-btn tasks-action-delete"
-                    onClick={() => handleDelete(task.id)}
-                    aria-label="Delete task"
-                    title="Delete"
-                  >
-                    ✕
-                  </button>
+                    {TASK_STATUSES.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="tasks-action-btns-row">
+                    <button
+                      className="tasks-action-btn tasks-action-restore"
+                      onClick={() => toggleComplete(task.id)}
+                      aria-label="Restore task"
+                      title="Restore task to active"
+                    >
+                      ↩
+                    </button>
+                    <button
+                      className="tasks-action-btn tasks-action-delete"
+                      onClick={() => setDeleteTarget({ type: 'task', id: task.id, title: task.title })}
+                      aria-label="Delete task"
+                      title="Delete"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -933,6 +1311,41 @@ export default function TasksView({
                 className="tasks-btn tasks-btn-ghost"
                 onClick={closeSyncModal}
                 disabled={syncing}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="tasks-modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div
+            className="tasks-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="delete-modal-title"
+          >
+            <h3 id="delete-modal-title" className="tasks-modal-title">
+              Delete {deleteTarget.type === 'task' ? 'Task' : 'Subtask'}
+            </h3>
+            <p className="tasks-modal-desc">
+              Are you sure you want to delete &quot;<strong>{deleteTarget.title}</strong>&quot; (#
+              {deleteTarget.type === 'task' ? deleteTarget.id : deleteTarget.subtaskId})? This action cannot be undone.
+            </p>
+            <div className="tasks-form-actions" style={{ marginTop: '1rem' }}>
+              <button
+                className="tasks-btn tasks-btn-danger"
+                onClick={confirmDelete}
+                autoFocus
+              >
+                Delete
+              </button>
+              <button
+                className="tasks-btn tasks-btn-ghost"
+                onClick={() => setDeleteTarget(null)}
               >
                 Cancel
               </button>
@@ -1102,6 +1515,112 @@ function TaskForm({
             Cancel
           </button>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SubtaskForm sub-component
+// ---------------------------------------------------------------------------
+
+function SubtaskForm({
+  initial,
+  onSave,
+  onCancel,
+}: {
+  initial?: Partial<Subtask>
+  onSave: (data: { title: string; hasBlocker: boolean; blocker: string; comments: string; status: TaskStatus }) => void
+  onCancel: () => void
+}) {
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [status, setStatus] = useState<TaskStatus>(initial?.status ?? 'To Do')
+  const [hasBlocker, setHasBlocker] = useState(initial?.hasBlocker ?? false)
+  const [blockerText, setBlockerText] = useState(initial?.blocker ?? '')
+  const [comments, setComments] = useState(initial?.comments ?? '')
+
+  return (
+    <div className="tasks-subtask-form">
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          type="text"
+          className="tasks-input"
+          style={{ flex: 1, minWidth: '150px', padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+          placeholder="Subtask title…"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && title.trim()) {
+              onSave({ title: title.trim(), hasBlocker, blocker: blockerText, comments, status })
+            }
+          }}
+          autoFocus
+        />
+        <select
+          className="tasks-input"
+          style={{ width: '110px', padding: '0.25rem 0.4rem', fontSize: '0.75rem', cursor: 'pointer' }}
+          value={status}
+          onChange={(e) => setStatus(e.target.value as TaskStatus)}
+        >
+          {TASK_STATUSES.map((st) => (
+            <option key={st} value={st}>
+              {st}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+        <label className="tasks-checkbox-label" style={{ fontSize: '0.75rem' }}>
+          <input
+            type="checkbox"
+            checked={hasBlocker}
+            onChange={(e) => setHasBlocker(e.target.checked)}
+            className="tasks-checkbox"
+          />
+          Has Blocker
+        </label>
+        {hasBlocker && (
+          <input
+            type="text"
+            className="tasks-input"
+            style={{ flex: 1, minWidth: '120px', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+            placeholder="Blocker details…"
+            value={blockerText}
+            onChange={(e) => setBlockerText(e.target.value)}
+          />
+        )}
+      </div>
+
+      <div style={{ marginTop: '0.35rem' }}>
+        <input
+          type="text"
+          className="tasks-input"
+          style={{ width: '100%', padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+          placeholder="Comments (optional)…"
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.4rem' }}>
+        <button
+          className="tasks-btn tasks-btn-primary"
+          style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem' }}
+          onClick={() => {
+            if (title.trim()) onSave({ title: title.trim(), hasBlocker, blocker: blockerText, comments, status })
+          }}
+          disabled={!title.trim()}
+        >
+          Save Subtask
+        </button>
+        <button
+          className="tasks-btn tasks-btn-ghost"
+          style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem' }}
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
       </div>
     </div>
   )
