@@ -807,7 +807,7 @@ export default function TasksView({
     setSyncFeedback(null)
 
     if (syncModal === 'push') {
-      const payload = { tasks: sortTasks(tasks) }
+      const payload = { tasks: sortTasks(tasks), statusItems: sortStatusItems(statusItems) }
       const result = await syncPush(syncPassword, payload)
       if (result.success) {
         closeSyncModal()
@@ -818,15 +818,18 @@ export default function TasksView({
       const result = await syncPull(syncPassword)
       if (result.success && result.data) {
         let pulledTasks: Task[] = []
+        let pulledStatusItems: StatusItem[] = []
 
         if (Array.isArray(result.data)) {
           pulledTasks = result.data as Task[]
         } else if (typeof result.data === 'object' && result.data !== null) {
           const obj = result.data as Record<string, unknown>
           if (Array.isArray(obj.tasks)) pulledTasks = obj.tasks as Task[]
+          if (Array.isArray(obj.statusItems)) pulledStatusItems = obj.statusItems as StatusItem[]
         }
 
         if (pulledTasks.length > 0) persist(pulledTasks)
+        if (pulledStatusItems.length > 0) persistStatusItems(pulledStatusItems)
         closeSyncModal()
       } else {
         setSyncFeedback({ type: 'error', message: result.error ?? 'Pull failed' })
