@@ -30,22 +30,7 @@ interface Task {
   subtasks?: Subtask[]
 }
 
-export type PrApprovalType = 'Pull Request' | 'Approval'
-export type PrStatus = 'Draft' | 'In Review' | 'Changes Requested' | 'Approved' | 'Merged'
 
-export interface PrApprovalItem {
-  id: string
-  title: string
-  type: PrApprovalType
-  url: string
-  repo: string
-  author: string
-  status: PrStatus
-  priority: Priority
-  comments: string
-  completed: boolean
-  order: number
-}
 
 export type StatusItemStatus = 'Pending' | 'In Progress' | 'Blocked' | 'Done'
 
@@ -64,14 +49,10 @@ type TaskStatus = NonNullable<Task['status']>
 const PRIORITIES: Priority[] = ['High', 'Medium', 'Low', 'Backlog']
 const TASK_STATUSES: TaskStatus[] = ['To Do', 'In Progress', 'On Hold', 'Done']
 
-const PR_STATUSES: PrStatus[] = ['Draft', 'In Review', 'Changes Requested', 'Approved', 'Merged']
-const PR_TYPES: PrApprovalType[] = ['Pull Request', 'Approval']
+
 const STATUS_ITEM_STATUSES: StatusItemStatus[] = ['Pending', 'In Progress', 'Blocked', 'Done']
 
-const PR_TYPE_SHORT_LABELS: Record<PrApprovalType, string> = {
-  'Pull Request': 'PR',
-  Approval: 'Appr',
-}
+
 
 const STATUS_ITEM_COLORS: Record<StatusItemStatus, { bg: string; fg: string; border: string }> = {
   Pending: { bg: '#f1f5f9', fg: '#475569', border: '#cbd5e1' },
@@ -94,21 +75,10 @@ const STATUS_COLORS: Record<TaskStatus, { bg: string; fg: string; border: string
   Done: { bg: '#dcfce7', fg: '#15803d', border: '#bbf7d0' },
 }
 
-const PR_STATUS_COLORS: Record<PrStatus, { bg: string; fg: string; border: string }> = {
-  Draft: { bg: '#f1f5f9', fg: '#475569', border: '#cbd5e1' },
-  'In Review': { bg: '#e0f2fe', fg: '#0369a1', border: '#bae6fd' },
-  'Changes Requested': { bg: '#ffedd5', fg: '#c2410c', border: '#fed7aa' },
-  Approved: { bg: '#dcfce7', fg: '#15803d', border: '#bbf7d0' },
-  Merged: { bg: '#f3e8ff', fg: '#6b21a8', border: '#e9d5ff' },
-}
 
-const PR_TYPE_COLORS: Record<PrApprovalType, { bg: string; fg: string; border: string }> = {
-  'Pull Request': { bg: '#f3e8ff', fg: '#7e22ce', border: '#d8b4fe' },
-  Approval: { bg: '#ccfbf1', fg: '#0f766e', border: '#99f6e4' },
-}
 
 const STORAGE_KEY = 'alphacrash-tasks'
-const STORAGE_KEY_PRS = 'alphacrash-prs'
+
 const STORAGE_KEY_STATUS = 'alphacrash-status'
 
 // ---------------------------------------------------------------------------
@@ -131,7 +101,7 @@ function mapStatus(status: unknown, completed?: boolean): TaskStatus {
   return 'To Do'
 }
 
-function getAllUsedIds(tasks: Task[], prItems: PrApprovalItem[] = [], statusItems: StatusItem[] = []): Set<string> {
+function getAllUsedIds(tasks: Task[], statusItems: StatusItem[] = []): Set<string> {
   const set = new Set<string>()
   for (const t of tasks) {
     if (t.id) set.add(t.id)
@@ -141,17 +111,14 @@ function getAllUsedIds(tasks: Task[], prItems: PrApprovalItem[] = [], statusItem
       }
     }
   }
-  for (const pr of prItems) {
-    if (pr.id) set.add(pr.id)
-  }
   for (const si of statusItems) {
     if (si.id) set.add(si.id)
   }
   return set
 }
 
-function generateId(existingTasks: Task[] = [], existingPrs: PrApprovalItem[] = [], existingStatus: StatusItem[] = []): string {
-  const usedIds = getAllUsedIds(existingTasks, existingPrs, existingStatus)
+function generateId(existingTasks: Task[] = [], existingStatus: StatusItem[] = []): string {
+  const usedIds = getAllUsedIds(existingTasks, existingStatus)
   let id = ''
   do {
     id = Math.floor(1000 + Math.random() * 9000).toString()
@@ -216,35 +183,7 @@ function saveTasks(tasks: Task[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
 }
 
-function loadPrItems(): PrApprovalItem[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PRS)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return (parsed as PrApprovalItem[]).map((pr, idx) => ({
-      id: pr.id ?? Math.floor(1000 + Math.random() * 9000).toString(),
-      title: String(pr.title ?? '').trim(),
-      type: pr.type === 'Approval' ? 'Approval' : 'Pull Request',
-      url: String(pr.url ?? '').trim(),
-      repo: String(pr.repo ?? '').trim(),
-      author: String(pr.author ?? '').trim(),
-      status: (PR_STATUSES.includes(pr.status) ? pr.status : 'In Review') as PrStatus,
-      priority: mapPriority(pr.priority),
-      comments: String(pr.comments ?? '').trim(),
-      completed: Boolean(pr.completed || pr.status === 'Merged'),
-      order: typeof pr.order === 'number' ? pr.order : idx + 1,
-    }))
-  } catch {
-    return []
-  }
-}
 
-function savePrItems(prs: PrApprovalItem[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY_PRS, JSON.stringify(prs))
-}
 
 function loadStatusItems(): StatusItem[] {
   if (typeof window === 'undefined') return []
@@ -280,16 +219,7 @@ function sortStatusItems(items: StatusItem[]): StatusItem[] {
   })
 }
 
-function sortPrItems(items: PrApprovalItem[]): PrApprovalItem[] {
-  return [...items].sort((a, b) => {
-    if (!!a.completed !== !!b.completed) {
-      return a.completed ? 1 : -1
-    }
-    const pi = PRIORITIES.indexOf(mapPriority(a.priority)) - PRIORITIES.indexOf(mapPriority(b.priority))
-    if (pi !== 0) return pi
-    return a.order - b.order
-  })
-}
+
 
 /** Normalize orders within each priority group so they are sequential 1,2,3… */
 function normalizeOrders(tasks: Task[]): Task[] {
@@ -350,7 +280,6 @@ function isValidTask(t: unknown): t is Task {
 type DeleteTarget =
   | { type: 'task'; id: string; title: string }
   | { type: 'subtask'; taskId: string; subtaskId: string; title: string }
-  | { type: 'pr'; id: string; title: string }
   | { type: 'status'; id: string; title: string }
 
 // ---------------------------------------------------------------------------
@@ -363,19 +292,16 @@ export default function TasksView({
   showJsonOptions?: boolean
 }) {
   // Tab navigation state
-  const [activeTab, setActiveTab] = useState<'tasks' | 'prs' | 'approvals' | 'status'>('tasks')
+  const [activeTab, setActiveTab] = useState<'tasks' | 'status'>('tasks')
 
-  // Tasks, PRs & Status state
+  // Tasks & Status state
   const [tasks, setTasks] = useState<Task[]>([])
-  const [prItems, setPrItems] = useState<PrApprovalItem[]>([])
   const [statusItems, setStatusItems] = useState<StatusItem[]>([])
   const [loaded, setLoaded] = useState(false)
 
   // Edit modals state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [editingPrId, setEditingPrId] = useState<string | null>(null)
-  const [showAddPrModal, setShowAddPrModal] = useState(false)
 
   const [importError, setImportError] = useState<string | null>(null)
   const [importSuccess, setImportSuccess] = useState(false)
@@ -408,15 +334,7 @@ export default function TasksView({
   const [formBlockerText, setFormBlockerText] = useState('')
   const [formComments, setFormComments] = useState('')
 
-  // PR Form state
-  const [prFormTitle, setPrFormTitle] = useState('')
-  const [prFormType, setPrFormType] = useState<PrApprovalType>('Pull Request')
-  const [prFormUrl, setPrFormUrl] = useState('')
-  const [prFormRepo, setPrFormRepo] = useState('')
-  const [prFormAuthor, setPrFormAuthor] = useState('')
-  const [prFormStatus, setPrFormStatus] = useState<PrStatus>('In Review')
-  const [prFormPriority, setPrFormPriority] = useState<Priority>('Medium')
-  const [prFormComments, setPrFormComments] = useState('')
+
 
   // Status Form state
   const [statusFormTitle, setStatusFormTitle] = useState('')
@@ -428,10 +346,8 @@ export default function TasksView({
   // Load from localStorage on mount
   useEffect(() => {
     const loadedTasks = loadTasks()
-    const loadedPrs = loadPrItems()
     const loadedStatus = loadStatusItems()
     setTasks(normalizeOrders(loadedTasks))
-    setPrItems(loadedPrs)
     setStatusItems(loadedStatus)
     setLoaded(true)
   }, [])
@@ -443,10 +359,7 @@ export default function TasksView({
     saveTasks(normalized)
   }, [])
 
-  const persistPrs = useCallback((updated: PrApprovalItem[]) => {
-    setPrItems(updated)
-    savePrItems(updated)
-  }, [])
+
 
   const persistStatusItems = useCallback((updated: StatusItem[]) => {
     setStatusItems(updated)
@@ -578,115 +491,10 @@ export default function TasksView({
       handleDelete(deleteTarget.id)
     } else if (deleteTarget.type === 'subtask') {
       handleDeleteSubtask(deleteTarget.taskId, deleteTarget.subtaskId)
-    } else if (deleteTarget.type === 'pr') {
-      handlePrDelete(deleteTarget.id)
     } else if (deleteTarget.type === 'status') {
       handleStatusDelete(deleteTarget.id)
     }
     setDeleteTarget(null)
-  }
-
-  // ------ PR Handlers ------
-  function resetPrForm() {
-    setPrFormTitle('')
-    setPrFormType('Pull Request')
-    setPrFormUrl('')
-    setPrFormRepo('')
-    setPrFormAuthor('')
-    setPrFormStatus('In Review')
-    setPrFormPriority('Medium')
-    setPrFormComments('')
-  }
-
-  function handleAddPr() {
-    if (!prFormTitle.trim()) return
-    const isDone = prFormStatus === 'Merged'
-    const newPr: PrApprovalItem = {
-      id: generateId(tasks, prItems),
-      title: prFormTitle.trim(),
-      type: prFormType,
-      url: prFormUrl.trim(),
-      repo: prFormRepo.trim(),
-      author: prFormAuthor.trim(),
-      status: prFormStatus,
-      priority: prFormPriority,
-      comments: prFormComments.trim(),
-      completed: isDone,
-      order: prItems.length + 1,
-    }
-    persistPrs([...prItems, newPr])
-    resetPrForm()
-    setShowAddPrModal(false)
-  }
-
-  function startEditPr(pr: PrApprovalItem) {
-    setEditingPrId(pr.id)
-    setPrFormTitle(pr.title)
-    setPrFormType(pr.type)
-    setPrFormUrl(pr.url)
-    setPrFormRepo(pr.repo)
-    setPrFormAuthor(pr.author)
-    setPrFormStatus(pr.status)
-    setPrFormPriority(pr.priority)
-    setPrFormComments(pr.comments)
-  }
-
-  function handleSaveEditPr() {
-    if (!editingPrId || !prFormTitle.trim()) return
-    const isDone = prFormStatus === 'Merged'
-    const updated = prItems.map((pr) =>
-      pr.id === editingPrId
-        ? {
-            ...pr,
-            title: prFormTitle.trim(),
-            type: prFormType,
-            url: prFormUrl.trim(),
-            repo: prFormRepo.trim(),
-            author: prFormAuthor.trim(),
-            status: prFormStatus,
-            priority: prFormPriority,
-            comments: prFormComments.trim(),
-            completed: isDone,
-          }
-        : pr
-    )
-    persistPrs(updated)
-    setEditingPrId(null)
-    resetPrForm()
-  }
-
-  function cancelPrEdit() {
-    setEditingPrId(null)
-    resetPrForm()
-  }
-
-  function updatePrStatus(id: string, status: PrStatus) {
-    const isDone = status === 'Merged'
-    const updated = prItems.map((pr) =>
-      pr.id === id ? { ...pr, status, completed: isDone } : pr
-    )
-    persistPrs(updated)
-  }
-
-  function togglePrComplete(id: string) {
-    const updated = prItems.map((pr) => {
-      if (pr.id !== id) return pr
-      const isNowDone = !pr.completed
-      return {
-        ...pr,
-        completed: isNowDone,
-        status: isNowDone ? ('Merged' as PrStatus) : ('In Review' as PrStatus),
-      }
-    })
-    persistPrs(updated)
-  }
-
-  function handlePrDelete(id: string) {
-    persistPrs(prItems.filter((pr) => pr.id !== id))
-    if (editingPrId === id) {
-      setEditingPrId(null)
-      resetPrForm()
-    }
   }
 
   // ------ Status Item Handlers ------
@@ -700,7 +508,7 @@ export default function TasksView({
     if (!statusFormTitle.trim()) return
     const isDone = statusFormStatus === 'Done'
     const newItem: StatusItem = {
-      id: generateId(tasks, prItems, statusItems),
+      id: generateId(tasks, statusItems),
       title: statusFormTitle.trim(),
       status: statusFormStatus,
       comments: statusFormComments.trim(),
@@ -999,7 +807,7 @@ export default function TasksView({
     setSyncFeedback(null)
 
     if (syncModal === 'push') {
-      const payload = { tasks: sortTasks(tasks), prs: prItems }
+      const payload = { tasks: sortTasks(tasks) }
       const result = await syncPush(syncPassword, payload)
       if (result.success) {
         closeSyncModal()
@@ -1010,18 +818,15 @@ export default function TasksView({
       const result = await syncPull(syncPassword)
       if (result.success && result.data) {
         let pulledTasks: Task[] = []
-        let pulledPrs: PrApprovalItem[] = []
 
         if (Array.isArray(result.data)) {
           pulledTasks = result.data as Task[]
         } else if (typeof result.data === 'object' && result.data !== null) {
           const obj = result.data as Record<string, unknown>
           if (Array.isArray(obj.tasks)) pulledTasks = obj.tasks as Task[]
-          if (Array.isArray(obj.prs)) pulledPrs = obj.prs as PrApprovalItem[]
         }
 
         if (pulledTasks.length > 0) persist(pulledTasks)
-        if (pulledPrs.length > 0) persistPrs(pulledPrs)
         closeSyncModal()
       } else {
         setSyncFeedback({ type: 'error', message: result.error ?? 'Pull failed' })
@@ -1043,14 +848,7 @@ export default function TasksView({
   const activeTasks = sortTasks(tasks.filter((t) => !t.completed))
   const completedTasks = sortTasks(tasks.filter((t) => t.completed))
 
-  const allActivePrs = sortPrItems(prItems.filter((p) => !p.completed))
-  const allCompletedPrs = sortPrItems(prItems.filter((p) => p.completed))
 
-  // Split PRs and Approvals
-  const activePrs = allActivePrs.filter((p) => p.type === 'Pull Request')
-  const completedPrsOnly = allCompletedPrs.filter((p) => p.type === 'Pull Request')
-  const activeApprovals = allActivePrs.filter((p) => p.type === 'Approval')
-  const completedApprovals = allCompletedPrs.filter((p) => p.type === 'Approval')
 
   const activeStatusItems = sortStatusItems(statusItems.filter((s) => !s.completed))
   const completedStatusItems = sortStatusItems(statusItems.filter((s) => s.completed))
@@ -1079,7 +877,7 @@ export default function TasksView({
                 <button
                   className="tasks-btn tasks-btn-secondary"
                   onClick={handleExport}
-                  disabled={tasks.length === 0 && prItems.length === 0}
+                  disabled={tasks.length === 0}
                   id="export-btn"
                 >
                   Export JSON
@@ -1102,7 +900,7 @@ export default function TasksView({
             <button
               className="tasks-btn tasks-btn-sync tasks-btn-push"
               onClick={() => openSyncModal('push')}
-              disabled={tasks.length === 0 && prItems.length === 0}
+              disabled={tasks.length === 0}
               id="sync-push-btn"
             >
               ↑ Push
@@ -1127,22 +925,7 @@ export default function TasksView({
             <span className="tasks-tab-icon">📋</span>
             Tasks <span className="tasks-tab-badge">{activeTasks.length}</span>
           </button>
-          <button
-            className={`tasks-tab-btn ${activeTab === 'prs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('prs')}
-            id="tab-prs"
-          >
-            <span className="tasks-tab-icon">🔀</span>
-            PRs <span className="tasks-tab-badge">{activePrs.length}</span>
-          </button>
-          <button
-            className={`tasks-tab-btn ${activeTab === 'approvals' ? 'active' : ''}`}
-            onClick={() => setActiveTab('approvals')}
-            id="tab-approvals"
-          >
-            <span className="tasks-tab-icon">✅</span>
-            Approvals <span className="tasks-tab-badge">{activeApprovals.length}</span>
-          </button>
+
           <button
             className={`tasks-tab-btn ${activeTab === 'status' ? 'active' : ''}`}
             onClick={() => setActiveTab('status')}
@@ -1600,46 +1383,6 @@ export default function TasksView({
             </div>
           )}
         </>
-      ) : activeTab === 'prs' ? (
-        /* PRs Tab Content */
-        <PrApprovalSection
-          activePrs={activePrs}
-          completedPrs={completedPrsOnly}
-          sectionTitle="Pull Requests"
-          emptyTitle="No Pull Requests tracked yet"
-          emptyDesc='Click &ldquo;+ Add PR&rdquo; to add your first pull request.'
-          addLabel="+ Add PR"
-          onAddNew={() => {
-            resetPrForm()
-            setPrFormType('Pull Request')
-            setEditingPrId(null)
-            setShowAddPrModal(true)
-          }}
-          onStartEdit={startEditPr}
-          onDelete={(pr) => setDeleteTarget({ type: 'pr', id: pr.id, title: pr.title })}
-          onUpdateStatus={updatePrStatus}
-          onToggleComplete={togglePrComplete}
-        />
-      ) : activeTab === 'approvals' ? (
-        /* Approvals Tab Content */
-        <PrApprovalSection
-          activePrs={activeApprovals}
-          completedPrs={completedApprovals}
-          sectionTitle="Approvals"
-          emptyTitle="No Approvals tracked yet"
-          emptyDesc='Click &ldquo;+ Add Approval&rdquo; to add your first approval.'
-          addLabel="+ Add Approval"
-          onAddNew={() => {
-            resetPrForm()
-            setPrFormType('Approval')
-            setEditingPrId(null)
-            setShowAddPrModal(true)
-          }}
-          onStartEdit={startEditPr}
-          onDelete={(pr) => setDeleteTarget({ type: 'pr', id: pr.id, title: pr.title })}
-          onUpdateStatus={updatePrStatus}
-          onToggleComplete={togglePrComplete}
-        />
       ) : (
         /* Status Tab Content */
         <StatusSection
@@ -1654,35 +1397,6 @@ export default function TasksView({
           onDelete={(si) => setDeleteTarget({ type: 'status', id: si.id, title: si.title })}
           onUpdateStatus={updateStatusItemStatus}
           onToggleComplete={toggleStatusComplete}
-        />
-      )}
-
-      {/* Add / Edit PR Form Modal */}
-      {(showAddPrModal || editingPrId !== null) && (
-        <PrApprovalFormModal
-          isEdit={editingPrId !== null}
-          id={editingPrId ?? undefined}
-          title={prFormTitle}
-          type={prFormType}
-          url={prFormUrl}
-          repo={prFormRepo}
-          author={prFormAuthor}
-          status={prFormStatus}
-          priority={prFormPriority}
-          comments={prFormComments}
-          onTitleChange={setPrFormTitle}
-          onTypeChange={setPrFormType}
-          onUrlChange={setPrFormUrl}
-          onRepoChange={setPrFormRepo}
-          onAuthorChange={setPrFormAuthor}
-          onStatusChange={setPrFormStatus}
-          onPriorityChange={setPrFormPriority}
-          onCommentsChange={setPrFormComments}
-          onSubmit={editingPrId ? handleSaveEditPr : handleAddPr}
-          onCancel={() => {
-            setShowAddPrModal(false)
-            cancelPrEdit()
-          }}
         />
       )}
 
@@ -1785,7 +1499,7 @@ export default function TasksView({
             aria-labelledby="delete-modal-title"
           >
             <h3 id="delete-modal-title" className="tasks-modal-title">
-              Delete {deleteTarget.type === 'task' ? 'Task' : deleteTarget.type === 'pr' ? 'PR / Approval' : deleteTarget.type === 'status' ? 'Status Item' : 'Subtask'}
+              Delete {deleteTarget.type === 'task' ? 'Task' : deleteTarget.type === 'status' ? 'Status Item' : 'Subtask'}
             </h3>
             <p className="tasks-modal-desc">
               Are you sure you want to delete &quot;<strong>{deleteTarget.title}</strong>&quot; (#
@@ -2229,488 +1943,7 @@ function SubtaskItem({
   )
 }
 
-// ---------------------------------------------------------------------------
-// PR & Approvals View Sub-components
-// ---------------------------------------------------------------------------
 
-function PrApprovalSection({
-  activePrs,
-  completedPrs,
-  sectionTitle = 'Pull Requests & Approvals',
-  emptyTitle = 'No items tracked yet',
-  emptyDesc = 'Click the button above to add one.',
-  addLabel = '+ Add PR / Approval',
-  onAddNew,
-  onStartEdit,
-  onDelete,
-  onUpdateStatus,
-  onToggleComplete,
-}: {
-  activePrs: PrApprovalItem[]
-  completedPrs: PrApprovalItem[]
-  sectionTitle?: string
-  emptyTitle?: string
-  emptyDesc?: string
-  addLabel?: string
-  onAddNew: () => void
-  onStartEdit: (pr: PrApprovalItem) => void
-  onDelete: (pr: PrApprovalItem) => void
-  onUpdateStatus: (id: string, status: PrStatus) => void
-  onToggleComplete: (id: string) => void
-}) {
-  const hasItems = activePrs.length > 0 || completedPrs.length > 0
-
-  return (
-    <div className="tasks-pr-view">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '0.5rem' }}>
-        <h2 className="text-lg font-semibold tracking-tight" style={{ margin: 0 }}>
-          {sectionTitle}
-        </h2>
-        <button
-          className="tasks-btn tasks-btn-primary"
-          onClick={onAddNew}
-          id="add-pr-btn"
-        >
-          {addLabel}
-        </button>
-      </div>
-
-      {!hasItems && (
-        <div className="tasks-empty-state">
-          <p className="tasks-empty-title">{emptyTitle}</p>
-          <p className="tasks-empty-desc">{emptyDesc}</p>
-        </div>
-      )}
-
-      {/* Active PRs & Approvals grouped by Priority */}
-      {activePrs.length > 0 && (
-        <div className="tasks-priority-sections">
-          {PRIORITIES.map((p) => {
-            const groupPrs = activePrs.filter((item) => item.priority === p)
-            if (groupPrs.length === 0) return null
-
-            return (
-              <div key={p} className="tasks-priority-group">
-                <div className="tasks-section-header">
-                  <span
-                    className="tasks-section-dot"
-                    style={{ backgroundColor: PRIORITY_COLORS[p] }}
-                  />
-                  <h2 className="tasks-section-title">{p} Priority</h2>
-                  <span className="tasks-section-count">{groupPrs.length}</span>
-                </div>
-
-                <div className="tasks-list">
-                  {groupPrs.map((pr) => (
-                    <div key={pr.id} className="tasks-item pr-card" id={`pr-${pr.id}`}>
-                      {/* Badges column */}
-                      <div className="tasks-badges-col">
-                        <span
-                          className="tasks-priority-badge"
-                          style={{ backgroundColor: PRIORITY_COLORS[pr.priority] }}
-                        >
-                          {pr.priority}
-                        </span>
-                        <span
-                          className="pr-type-badge"
-                          style={{
-                            backgroundColor: PR_TYPE_COLORS[pr.type].bg,
-                            color: PR_TYPE_COLORS[pr.type].fg,
-                            borderColor: PR_TYPE_COLORS[pr.type].border,
-                          }}
-                        >
-                          {PR_TYPE_SHORT_LABELS[pr.type]}
-                        </span>
-                        <span className="tasks-id-badge" title={`ID: #${pr.id}`}>
-                          #{pr.id}
-                        </span>
-                      </div>
-
-                      {/* Content */}
-                      <div className="tasks-item-content">
-                        <div className="tasks-item-header">
-                          <div className="tasks-item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <span>{pr.title}</span>
-                            {pr.url && (
-                              <a
-                                href={pr.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="pr-link-btn"
-                                title={`Open link: ${pr.url}`}
-                              >
-                                ↗
-                              </a>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Metadata Pills */}
-                        <div className="pr-meta-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
-                          {pr.repo && (
-                            <span className="pr-meta-tag">
-                              📦 {pr.repo}
-                            </span>
-                          )}
-                          {pr.author && (
-                            <span className="pr-meta-tag">
-                              👤 {pr.author}
-                            </span>
-                          )}
-                        </div>
-
-                        {pr.comments && (
-                          <div className="tasks-item-comments" style={{ marginTop: '0.35rem' }}>
-                            <span className="tasks-comments-icon">💬</span>
-                            <span>{pr.comments}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions Column */}
-                      <div className="tasks-item-actions">
-                        <select
-                          className="tasks-status-select pr-status-select"
-                          style={{
-                            backgroundColor: PR_STATUS_COLORS[pr.status].bg,
-                            color: PR_STATUS_COLORS[pr.status].fg,
-                            borderColor: PR_STATUS_COLORS[pr.status].border,
-                          }}
-                          value={pr.status}
-                          onChange={(e) => onUpdateStatus(pr.id, e.target.value as PrStatus)}
-                        >
-                          {PR_STATUSES.map((st) => (
-                            <option key={st} value={st}>
-                              {st}
-                            </option>
-                          ))}
-                        </select>
-
-                        <div className="tasks-action-btns-row">
-                          <button
-                            className="tasks-action-btn tasks-action-complete"
-                            onClick={() => onToggleComplete(pr.id)}
-                            title="Mark Merged / Complete"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            className="tasks-action-btn tasks-action-edit"
-                            onClick={() => onStartEdit(pr)}
-                            title="Edit PR / Approval"
-                          >
-                            ✎
-                          </button>
-                          <button
-                            className="tasks-action-btn tasks-action-delete"
-                            onClick={() => onDelete(pr)}
-                            title="Delete"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Completed/Merged PRs */}
-      {completedPrs.length > 0 && (
-        <div className="tasks-completed-section">
-          <div className="tasks-section-header tasks-completed-header">
-            <span className="tasks-section-dot tasks-completed-dot" />
-            <h2 className="tasks-section-title">Merged & Completed</h2>
-            <span className="tasks-section-count">{completedPrs.length}</span>
-          </div>
-
-          <div className="tasks-list">
-            {completedPrs.map((pr) => (
-              <div key={pr.id} className="tasks-item tasks-item-completed pr-card" id={`pr-${pr.id}`}>
-                <div className="tasks-badges-col">
-                  <span
-                    className="tasks-priority-badge tasks-priority-badge-completed"
-                    style={{ backgroundColor: PRIORITY_COLORS[pr.priority] }}
-                  >
-                    {pr.priority}
-                  </span>
-                  <span
-                    className="pr-type-badge"
-                    style={{
-                      backgroundColor: PR_TYPE_COLORS[pr.type].bg,
-                      color: PR_TYPE_COLORS[pr.type].fg,
-                      borderColor: PR_TYPE_COLORS[pr.type].border,
-                      opacity: 0.7,
-                    }}
-                  >
-                    {PR_TYPE_SHORT_LABELS[pr.type]}
-                  </span>
-                  <span className="tasks-id-badge tasks-id-badge-completed" title={`ID: #${pr.id}`}>
-                    #{pr.id}
-                  </span>
-                </div>
-
-                <div className="tasks-item-content">
-                  <div className="tasks-item-header">
-                    <div className="tasks-item-title tasks-item-title-completed" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>{pr.title}</span>
-                      {pr.url && (
-                        <a
-                          href={pr.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="pr-link-btn"
-                          title={`Open link: ${pr.url}`}
-                        >
-                          ↗
-                        </a>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pr-meta-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
-                    {pr.repo && <span className="pr-meta-tag">📦 {pr.repo}</span>}
-                    {pr.author && <span className="pr-meta-tag">👤 {pr.author}</span>}
-                  </div>
-
-                  {pr.comments && (
-                    <div className="tasks-item-comments" style={{ marginTop: '0.35rem' }}>
-                      <span className="tasks-comments-icon">💬</span>
-                      <span>{pr.comments}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="tasks-item-actions">
-                  <select
-                    className="tasks-status-select pr-status-select"
-                    style={{
-                      backgroundColor: PR_STATUS_COLORS[pr.status].bg,
-                      color: PR_STATUS_COLORS[pr.status].fg,
-                      borderColor: PR_STATUS_COLORS[pr.status].border,
-                    }}
-                    value={pr.status}
-                    onChange={(e) => onUpdateStatus(pr.id, e.target.value as PrStatus)}
-                  >
-                    {PR_STATUSES.map((st) => (
-                      <option key={st} value={st}>
-                        {st}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div className="tasks-action-btns-row">
-                    <button
-                      className="tasks-action-btn tasks-action-restore"
-                      onClick={() => onToggleComplete(pr.id)}
-                      title="Restore to Active"
-                    >
-                      ↩
-                    </button>
-                    <button
-                      className="tasks-action-btn tasks-action-delete"
-                      onClick={() => onDelete(pr)}
-                      title="Delete"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PrApprovalFormModal({
-  isEdit,
-  id,
-  title,
-  type,
-  url,
-  repo,
-  author,
-  status,
-  priority,
-  comments,
-  onTitleChange,
-  onTypeChange,
-  onUrlChange,
-  onRepoChange,
-  onAuthorChange,
-  onStatusChange,
-  onPriorityChange,
-  onCommentsChange,
-  onSubmit,
-  onCancel,
-}: {
-  isEdit: boolean
-  id?: string
-  title: string
-  type: PrApprovalType
-  url: string
-  repo: string
-  author: string
-  status: PrStatus
-  priority: Priority
-  comments: string
-  onTitleChange: (val: string) => void
-  onTypeChange: (val: PrApprovalType) => void
-  onUrlChange: (val: string) => void
-  onRepoChange: (val: string) => void
-  onAuthorChange: (val: string) => void
-  onStatusChange: (val: PrStatus) => void
-  onPriorityChange: (val: Priority) => void
-  onCommentsChange: (val: string) => void
-  onSubmit: () => void
-  onCancel: () => void
-}) {
-  return (
-    <div className="tasks-modal-overlay" onClick={onCancel}>
-      <div
-        className="tasks-modal tasks-modal-edit"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <h3 className="tasks-modal-title" style={{ margin: 0 }}>
-            {isEdit ? `Edit PR / Approval #${id}` : 'New PR / Approval'}
-          </h3>
-          <button className="tasks-alert-dismiss" onClick={onCancel} aria-label="Close">
-            ×
-          </button>
-        </div>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            onSubmit()
-          }}
-          className="tasks-form"
-        >
-          <div className="tasks-form-group">
-            <label className="tasks-label">Title *</label>
-            <input
-              type="text"
-              className="tasks-input"
-              placeholder="e.g., feat: add OAuth login flow"
-              value={title}
-              onChange={(e) => onTitleChange(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div className="tasks-form-group">
-              <label className="tasks-label">Type</label>
-              <select
-                className="tasks-input"
-                value={type}
-                onChange={(e) => onTypeChange(e.target.value as PrApprovalType)}
-                style={{ cursor: 'pointer' }}
-              >
-                {PR_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="tasks-form-group">
-              <label className="tasks-label">Priority</label>
-              <select
-                className="tasks-input"
-                value={priority}
-                onChange={(e) => onPriorityChange(e.target.value as Priority)}
-                style={{ cursor: 'pointer' }}
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="tasks-form-group">
-            <label className="tasks-label">Status</label>
-            <select
-              className="tasks-input"
-              value={status}
-              onChange={(e) => onStatusChange(e.target.value as PrStatus)}
-              style={{ cursor: 'pointer' }}
-            >
-              {PR_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div className="tasks-form-group">
-              <label className="tasks-label">Repository / Project</label>
-              <input
-                type="text"
-                className="tasks-input"
-                placeholder="e.g. alphacrash"
-                value={repo}
-                onChange={(e) => onRepoChange(e.target.value)}
-              />
-            </div>
-
-            <div className="tasks-form-group">
-              <label className="tasks-label">Author / Submitter</label>
-              <input
-                type="text"
-                className="tasks-input"
-                placeholder="e.g. @alphacrash"
-                value={author}
-                onChange={(e) => onAuthorChange(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="tasks-form-group">
-            <label className="tasks-label">PR / Document URL</label>
-            <input
-              type="url"
-              className="tasks-input"
-              placeholder="https://github.com/org/repo/pull/42"
-              value={url}
-              onChange={(e) => onUrlChange(e.target.value)}
-            />
-          </div>
-
-          <div className="tasks-form-group">
-            <label className="tasks-label">Notes / Review Comments</label>
-            <textarea
-              className="tasks-textarea"
-              placeholder="Add review notes, blockers, or link references…"
-              rows={2}
-              value={comments}
-              onChange={(e) => onCommentsChange(e.target.value)}
-            />
-          </div>
-
-          <div className="tasks-form-actions">
-            <button type="submit" className="tasks-btn tasks-btn-primary" disabled={!title.trim()}>
-              {isEdit ? 'Save Changes' : 'Create Item'}
-            </button>
-            <button type="button" className="tasks-btn tasks-btn-ghost" onClick={onCancel}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Status Section & Form Modal
