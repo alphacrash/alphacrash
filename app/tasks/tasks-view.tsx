@@ -38,6 +38,7 @@ export interface StatusItem {
   id: string
   title: string
   status: StatusItemStatus
+  priority: Priority
   comments: string
   completed: boolean
   order: number
@@ -196,6 +197,7 @@ function loadStatusItems(): StatusItem[] {
       id: si.id ?? Math.floor(1000 + Math.random() * 9000).toString(),
       title: String(si.title ?? '').trim(),
       status: (STATUS_ITEM_STATUSES.includes(si.status) ? si.status : 'Pending') as StatusItemStatus,
+      priority: mapPriority(si.priority ?? 'Low'),
       comments: String(si.comments ?? '').trim(),
       completed: Boolean(si.completed || si.status === 'Done'),
       order: typeof si.order === 'number' ? si.order : idx + 1,
@@ -212,11 +214,36 @@ function saveStatusItems(items: StatusItem[]) {
 
 function sortStatusItems(items: StatusItem[]): StatusItem[] {
   return [...items].sort((a, b) => {
-    if (!!a.completed !== !!b.completed) {
-      return a.completed ? 1 : -1
-    }
+    if (!!a.completed !== !!b.completed) return a.completed ? 1 : -1
+    const pA = a.priority || 'Low'
+    const pB = b.priority || 'Low'
+    const diff = PRIORITIES.indexOf(pA) - PRIORITIES.indexOf(pB)
+    if (diff !== 0) return diff
     return a.order - b.order
   })
+}
+
+function normalizeStatusOrders(items: StatusItem[]): StatusItem[] {
+  const active = items.filter((si) => !si.completed)
+  const completed = items.filter((si) => si.completed)
+
+  const normalizeGroup = (groupItems: StatusItem[]) => {
+    const groups: Record<Priority, StatusItem[]> = { High: [], Medium: [], Low: [], Backlog: [] }
+    for (const si of groupItems) {
+      const p = si.priority || 'Low'
+      groups[p].push(si)
+    }
+    const result: StatusItem[] = []
+    for (const p of PRIORITIES) {
+      const sorted = groups[p].sort((a, b) => a.order - b.order)
+      sorted.forEach((si, i) => {
+        result.push({ ...si, priority: p, order: i + 1 })
+      })
+    }
+    return result
+  }
+
+  return [...normalizeGroup(active), ...normalizeGroup(completed)]
 }
 
 
@@ -339,6 +366,7 @@ export default function TasksView({
   // Status Form state
   const [statusFormTitle, setStatusFormTitle] = useState('')
   const [statusFormStatus, setStatusFormStatus] = useState<StatusItemStatus>('Pending')
+  const [statusFormPriority, setStatusFormPriority] = useState<Priority>('Low')
   const [statusFormComments, setStatusFormComments] = useState('')
   const [showAddStatusModal, setShowAddStatusModal] = useState(false)
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null)
@@ -498,9 +526,30 @@ export default function TasksView({
   }
 
   // ------ Status Item Handlers ------
+  function moveStatusItem(id: string, direction: 'up' | 'down') {
+    const active = sortStatusItems(statusItems.filter((si) => !si.completed))
+    const idx = active.findIndex((si) => si.id === id)
+    if (idx === -1) return
+
+    const newActive = [...active]
+    if (direction === 'up' && idx > 0) {
+      ;[newActive[idx - 1], newActive[idx]] = [newActive[idx], newActive[idx - 1]]
+    } else if (direction === 'down' && idx < newActive.length - 1) {
+      ;[newActive[idx], newActive[idx + 1]] = [newActive[idx + 1], newActive[idx]]
+    } else {
+      return
+    }
+
+    const completed = sortStatusItems(statusItems.filter((si) => si.completed))
+    const reorderedActive = newActive.map((si, i) => ({ ...si, order: i + 1 }))
+    const reorderedCompleted = completed.map((si, i) => ({ ...si, order: reorderedActive.length + i + 1 }))
+    persistStatusItems(normalizeStatusOrders([...reorderedActive, ...reorderedCompleted]))
+  }
+
   function resetStatusForm() {
     setStatusFormTitle('')
     setStatusFormStatus('Pending')
+    setStatusFormPriority('Low')
     setStatusFormComments('')
   }
 
@@ -511,11 +560,12 @@ export default function TasksView({
       id: generateId(tasks, statusItems),
       title: statusFormTitle.trim(),
       status: statusFormStatus,
+      priority: statusFormPriority,
       comments: statusFormComments.trim(),
       completed: isDone,
       order: statusItems.length + 1,
     }
-    persistStatusItems([...statusItems, newItem])
+    persistStatusItems(normalizeStatusOrders([...statusItems, newItem]))
     resetStatusForm()
     setShowAddStatusModal(false)
   }
@@ -524,6 +574,7 @@ export default function TasksView({
     setEditingStatusId(item.id)
     setStatusFormTitle(item.title)
     setStatusFormStatus(item.status)
+    setStatusFormPriority(item.priority || 'Low')
     setStatusFormComments(item.comments)
   }
 
@@ -536,12 +587,13 @@ export default function TasksView({
             ...si,
             title: statusFormTitle.trim(),
             status: statusFormStatus,
+            priority: statusFormPriority,
             comments: statusFormComments.trim(),
             completed: isDone,
           }
         : si
     )
-    persistStatusItems(updated)
+    persistStatusItems(normalizeStatusOrders(updated))
     setEditingStatusId(null)
     resetStatusForm()
   }
@@ -556,7 +608,7 @@ export default function TasksView({
     const updated = statusItems.map((si) =>
       si.id === id ? { ...si, status, completed: isDone } : si
     )
-    persistStatusItems(updated)
+    persistStatusItems(normalizeStatusOrders(updated))
   }
 
   function toggleStatusComplete(id: string) {
@@ -569,7 +621,7 @@ export default function TasksView({
         status: isNowDone ? ('Done' as StatusItemStatus) : ('Pending' as StatusItemStatus),
       }
     })
-    persistStatusItems(updated)
+    persistStatusItems(normalizeStatusOrders(updated))
   }
 
   function handleStatusDelete(id: string) {
@@ -863,18 +915,6 @@ export default function TasksView({
 
         <div className="tasks-toolbar">
           <div className="tasks-toolbar-left">
-            <button
-              className="tasks-btn tasks-btn-primary"
-              onClick={() => {
-                resetForm()
-                setEditingId(null)
-                setShowAddForm(!showAddForm)
-              }}
-              id="add-task-btn"
-            >
-              {showAddForm ? 'Cancel' : '+ Add Task'}
-            </button>
-
             {showJsonOptions && (
               <>
                 <button
@@ -898,8 +938,31 @@ export default function TasksView({
               </>
             )}
           </div>
+        </div>
 
-          <div className="tasks-toolbar-right">
+        {/* Tab Navigation Segmented Control */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '1rem' }}>
+          <div className="tasks-tabs-nav">
+            <button
+              className={`tasks-tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tasks')}
+              id="tab-tasks"
+            >
+              <span className="tasks-tab-icon">📋</span>
+              Tasks <span className="tasks-tab-badge">{activeTasks.length}</span>
+            </button>
+
+            <button
+              className={`tasks-tab-btn ${activeTab === 'status' ? 'active' : ''}`}
+              onClick={() => setActiveTab('status')}
+              id="tab-status"
+            >
+              <span className="tasks-tab-icon">📊</span>
+              Status <span className="tasks-tab-badge">{activeStatusItems.length}</span>
+            </button>
+          </div>
+
+          <div className="tasks-toolbar-right" style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               className="tasks-btn tasks-btn-sync tasks-btn-push"
               onClick={() => openSyncModal('push')}
@@ -916,27 +979,6 @@ export default function TasksView({
               ↓ Pull
             </button>
           </div>
-        </div>
-
-        {/* Tab Navigation Segmented Control */}
-        <div className="tasks-tabs-nav" style={{ marginTop: '0.75rem' }}>
-          <button
-            className={`tasks-tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
-            onClick={() => setActiveTab('tasks')}
-            id="tab-tasks"
-          >
-            <span className="tasks-tab-icon">📋</span>
-            Tasks <span className="tasks-tab-badge">{activeTasks.length}</span>
-          </button>
-
-          <button
-            className={`tasks-tab-btn ${activeTab === 'status' ? 'active' : ''}`}
-            onClick={() => setActiveTab('status')}
-            id="tab-status"
-          >
-            <span className="tasks-tab-icon">📊</span>
-            Status <span className="tasks-tab-badge">{activeStatusItems.length}</span>
-          </button>
         </div>
       </div>
 
@@ -962,6 +1004,23 @@ export default function TasksView({
        {/* Active Tab Content */}
       {activeTab === 'tasks' ? (
         <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '0.5rem' }}>
+            <h2 className="text-lg font-semibold tracking-tight" style={{ margin: 0 }}>
+              Task Tracker
+            </h2>
+            <button
+              className="tasks-btn tasks-btn-primary"
+              onClick={() => {
+                resetForm()
+                setEditingId(null)
+                setShowAddForm(!showAddForm)
+              }}
+              id="add-task-btn"
+            >
+              {showAddForm ? 'Cancel' : '+ Add Task'}
+            </button>
+          </div>
+
           {/* Add form */}
           {showAddForm && (
             <div className="tasks-form-card">
@@ -1400,6 +1459,7 @@ export default function TasksView({
           onDelete={(si) => setDeleteTarget({ type: 'status', id: si.id, title: si.title })}
           onUpdateStatus={updateStatusItemStatus}
           onToggleComplete={toggleStatusComplete}
+          onMoveItem={moveStatusItem}
         />
       )}
 
@@ -1410,9 +1470,11 @@ export default function TasksView({
           id={editingStatusId ?? undefined}
           title={statusFormTitle}
           status={statusFormStatus}
+          priority={statusFormPriority}
           comments={statusFormComments}
           onTitleChange={setStatusFormTitle}
           onStatusChange={setStatusFormStatus}
+          onPriorityChange={setStatusFormPriority}
           onCommentsChange={setStatusFormComments}
           onSubmit={editingStatusId ? handleSaveEditStatus : handleAddStatus}
           onCancel={() => {
@@ -1960,6 +2022,7 @@ function StatusSection({
   onDelete,
   onUpdateStatus,
   onToggleComplete,
+  onMoveItem,
 }: {
   activeItems: StatusItem[]
   completedItems: StatusItem[]
@@ -1968,6 +2031,7 @@ function StatusSection({
   onDelete: (item: StatusItem) => void
   onUpdateStatus: (id: string, status: StatusItemStatus) => void
   onToggleComplete: (id: string) => void
+  onMoveItem: (id: string, direction: 'up' | 'down') => void
 }) {
   const hasItems = activeItems.length > 0 || completedItems.length > 0
 
@@ -1995,62 +2059,110 @@ function StatusSection({
 
       {/* Active Status Items */}
       {activeItems.length > 0 && (
-        <div className="tasks-list">
-          {activeItems.map((si) => (
-            <div key={si.id} className="status-item-card" id={`status-${si.id}`}>
-              <div className="status-item-content">
-                <div className="status-item-title">{si.title}</div>
-                {si.comments && (
-                  <div className="tasks-item-comments" style={{ marginTop: '0.2rem' }}>
-                    <span className="tasks-comments-icon">💬</span>
-                    <span>{si.comments}</span>
-                  </div>
-                )}
-              </div>
+        <div className="tasks-sections">
+          {PRIORITIES.map((priority) => {
+            const groupItems = activeItems.filter((si) => si.priority === priority)
+            if (groupItems.length === 0) return null
 
-              <div className="tasks-item-actions">
-                <select
-                  className="tasks-status-select"
-                  style={{
-                    backgroundColor: STATUS_ITEM_COLORS[si.status].bg,
-                    color: STATUS_ITEM_COLORS[si.status].fg,
-                    borderColor: STATUS_ITEM_COLORS[si.status].border,
-                  }}
-                  value={si.status}
-                  onChange={(e) => onUpdateStatus(si.id, e.target.value as StatusItemStatus)}
-                  title="Change status"
-                >
-                  {STATUS_ITEM_STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+            return (
+              <div key={priority} className="tasks-section">
+                <div className="tasks-section-header">
+                  <span
+                    className="tasks-section-dot"
+                    style={{ backgroundColor: PRIORITY_COLORS[priority] }}
+                  />
+                  <h2 className="tasks-section-title">{priority} Priority</h2>
+                  <span className="tasks-section-count">{groupItems.length}</span>
+                </div>
+                <div className="tasks-list">
+                  {groupItems.map((si) => {
+                    const globalIdx = activeItems.findIndex((x) => x.id === si.id)
+                    const isFirstActive = globalIdx === 0
+                    const isLastActive = globalIdx === activeItems.length - 1
 
-                <div className="tasks-action-btns-row">
-                  <button
-                    className="tasks-action-btn tasks-action-complete"
-                    onClick={() => onToggleComplete(si.id)}
-                    title="Mark Done"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    className="tasks-action-btn tasks-action-edit"
-                    onClick={() => onStartEdit(si)}
-                    title="Edit"
-                  >
-                    ✎
-                  </button>
-                  <button
-                    className="tasks-action-btn tasks-action-delete"
-                    onClick={() => onDelete(si)}
-                    title="Delete"
-                  >
-                    ✕
-                  </button>
+                    return (
+                      <div key={si.id} className="status-item-card" id={`status-${si.id}`}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          <div className="tasks-move-controls" style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <button
+                              className="tasks-move-btn"
+                              onClick={() => onMoveItem(si.id, 'up')}
+                              disabled={isFirstActive}
+                              aria-label="Move up"
+                              title="Move up"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              className="tasks-move-btn"
+                              onClick={() => onMoveItem(si.id, 'down')}
+                              disabled={isLastActive}
+                              aria-label="Move down"
+                              title="Move down"
+                            >
+                              ↓
+                            </button>
+                          </div>
+                          
+                          <div className="status-item-content">
+                            <div className="status-item-title">{si.title}</div>
+                            {si.comments && (
+                              <div className="tasks-item-comments" style={{ marginTop: '0.2rem' }}>
+                                <span className="tasks-comments-icon">💬</span>
+                                <span>{si.comments}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="tasks-item-actions">
+                          <select
+                            className="tasks-status-select"
+                            style={{
+                              backgroundColor: STATUS_ITEM_COLORS[si.status].bg,
+                              color: STATUS_ITEM_COLORS[si.status].fg,
+                              borderColor: STATUS_ITEM_COLORS[si.status].border,
+                            }}
+                            value={si.status}
+                            onChange={(e) => onUpdateStatus(si.id, e.target.value as StatusItemStatus)}
+                            title="Change status"
+                          >
+                            {STATUS_ITEM_STATUSES.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+
+                          <div className="tasks-action-btns-row">
+                            <button
+                              className="tasks-action-btn tasks-action-complete"
+                              onClick={() => onToggleComplete(si.id)}
+                              title="Mark Done"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              className="tasks-action-btn tasks-action-edit"
+                              onClick={() => onStartEdit(si)}
+                              title="Edit"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              className="tasks-action-btn tasks-action-delete"
+                              onClick={() => onDelete(si)}
+                              title="Delete"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -2122,9 +2234,11 @@ function StatusFormModal({
   id,
   title,
   status,
+  priority,
   comments,
   onTitleChange,
   onStatusChange,
+  onPriorityChange,
   onCommentsChange,
   onSubmit,
   onCancel,
@@ -2133,9 +2247,11 @@ function StatusFormModal({
   id?: string
   title: string
   status: StatusItemStatus
+  priority: Priority
   comments: string
   onTitleChange: (val: string) => void
   onStatusChange: (val: StatusItemStatus) => void
+  onPriorityChange: (val: Priority) => void
   onCommentsChange: (val: string) => void
   onSubmit: () => void
   onCancel: () => void
@@ -2175,6 +2291,20 @@ function StatusFormModal({
               required
               autoFocus
             />
+          </div>
+
+          <div className="tasks-form-group">
+            <label className="tasks-label">Priority</label>
+            <select
+              className="tasks-input"
+              value={priority}
+              onChange={(e) => onPriorityChange(e.target.value as Priority)}
+              style={{ cursor: 'pointer' }}
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
           </div>
 
           <div className="tasks-form-group">
