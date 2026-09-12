@@ -59,8 +59,8 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
         <link rel="manifest" href="/site.webmanifest" />
       </head>
-      <body className="antialiased max-w-xl mx-4 mt-8 lg:mx-auto">
-        <main className="flex-auto min-w-0 mt-6 flex flex-col px-2 md:px-0">
+      <body className="antialiased max-w-2xl w-full mx-auto mt-8 px-4 sm:px-6 lg:px-8">
+        <main className="flex-auto min-w-0 mt-6 flex flex-col">
           <Navbar />
           {children}
           <Footer />
