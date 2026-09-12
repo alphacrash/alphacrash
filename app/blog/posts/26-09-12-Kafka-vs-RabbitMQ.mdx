@@ -13,85 +13,51 @@ Decision lies on architect on where the intelligence of system should live: in i
 | **Consumer Responsibility** | Simple: process and acknowledge | Smart: tracks position (offsets) and state |
 | **Message Lifecycle** | Transient: Deleted on acknowledgement | Durable: retained based on retention policies |
 
-## Message Retention and Routing Logic
+## Message Retention and Routing
 
-- RabbitMQ
-    - Path is **Producer** -> **Broker** -> **Routing Rules** -> **Queue** -> **Consumer**
-    - Broker is smart, it knows where to route the messages.
-    - Consumer is dumb, it just consumes the messages.
-    - Messages are deleted after consumption.
-    - It's strength lies in sophisticated routing rules and built-in Dead Letter Queues (DLQ) for automatic handling of failed deliveries.
+**RabbitMQ** — Producer → Broker → Routing Rules → Queue → Consumer. Broker is smart, consumer is dumb. Messages deleted on acknowledgement. Built-in DLQs handle failed deliveries automatically.
 
-- Kafka
-    - Path is **Producer** -> **Topic** -> **Partition** -> **Consumer**
-    - Broker is dumb, it just stores the messages.
-    - Consumer is smart, it tracks position (offsets) and state.
-    - Messages are retained based on retention policies.
-        - Benefits - it enables **replayability**
-            - Let's say a new analytics service comes up six months from now, it can rewind to beginning and backfill its entire state.
+**Kafka** — Producer → Topic → Partition → Consumer. Broker is dumb (just stores), consumer is smart (tracks offsets). Messages retained by policy, enabling **replayability** — a new service can rewind and backfill from day one.
 
-**Key Difference** - RabbitMQ is transient while Kafka is durable system
+## Ordering and Parallelism
 
-## Ordering Guarantees and Parallelism
+**RabbitMQ** — global ordering within a queue, but only with a single consumer. Add more consumers → out-of-order.
 
-- RabbitMQ
-    - Provides global ordering within a queue, but only if you have a single consumer.
-    - Moment you add parallel consumers to increase speed, messages are processed out of order as different workers finish at different times
+**Kafka** — order guaranteed *within* a partition. Parallelism is limited by partition count, but it's predictable.
 
-- Kafka
-    - Solves via **partition-based ordering**.
-        - Topic split to partitions, order is guaranteed within each partition.
-        - Parallelism is strictly limited by number of partitions
+## Performance
 
-## Performance: Throughput vs Latency
+| | RabbitMQ | Kafka |
+| :--- | :--- | :--- |
+| **Model** | Push | Pull |
+| **Latency** | Low | Higher |
+| **Throughput** | 4K–10K msg/s | 100K+ msg/s |
+| **Per-message overhead** | High (tracks each) | Low (minimal tracking) |
 
-- RabbitMQ (Push Model)
-    - Broker pushes messages to consumer automatically.
-    - Low latency 
-    - Moderate scale fo 4K - 10K messages per second
-    - Overhead per message is high because broker must track each message (sent? acknowledged? pending redelivery?)
+## Delivery Semantics
 
-- Kafka (Pull Model)
-    - Consumers poll broker for messages
-    - High throughput - 100K+ messages per second
-    - Overhead per message is low - minimal tracking
+- **At Least Once** — both support it; duplicates possible on failure.
+- **At Most Once** — Kafka can drop messages; use when loss is acceptable.
+- **Exactly Once** — Kafka only, but only inside a Kafka→Kafka loop. Cross system boundaries → you're back to at least once. Design idempotent consumers regardless.
 
-## Delivery Semantics and Reliability
+## Ops Complexity
 
-- **At Least Once**: Both RabbitMQ and Kafka ensures that each message is delivered at least once, but it may deliver the same message multiple times in case of network failures or processing errors.
-- **At Most Once**: Kafka ensures that each message is delivered at most once, but it may drop messages in case of network failures or processing errors.
-- **Exactly Once**: Kafka’s "Exactly Once" support is the holy grail of distributed systems, but it is highly constrained. It only functions within a closed "Kafka-to-Kafka" loop using Kafka transactions. The moment your consumer writes to an external database, calls a third-party API, or crosses cluster boundaries, the guarantee evaporates and you revert to "at least once." Always design idempotent consumers. Do not choose Kafka based solely on "exactly once" promises; in the real world, you will still deal with duplicates.
+**RabbitMQ** — easier to set up, gentler learning curve, lower overhead.
 
-## Operational Complexity and Maintenance
+**Kafka** — steeper curve, historically needed Zookeeper (KRaft mode removes this in newer versions).
 
-- RabbitMQ
-    - Lower operational overhead
-    - Gentler learning curve
-    - Easier to set up and manage
+## Who Uses What
 
-- Kafka
-    - Higher operational overhead
-    - Steeper learning curve
-    - Requires Zookeeper for cluster management (though Kraft mode is removing this dependency in newer versions)
+| Company | Tool | Use case |
+| :--- | :--- | :--- |
+| Instagram | RabbitMQ | Photo resize / filter jobs |
+| Reddit | RabbitMQ | Comment threads, karma scoring |
+| Netflix | Kafka | Billing and recommendations |
+| Uber | Kafka | Real-time pricing, fraud detection |
+| LinkedIn | Kafka | Feeds and messaging (original creator) |
 
+## When to Use Which
 
+**RabbitMQ** — discrete tasks (emails, payments), smart routing, sub-5ms latency at moderate scale.
 
-## Real World Implementation: Who uses what?
-
-- Instagram: Uses RabbitMQ for background photo upload processing, specifically for resizing and filtering tasks.
-- Reddit: Employs RabbitMQ to build comment threads and calculate karma scores, treating these as discrete tasks.
-- Netflix: Leverages Kafka to process petabytes of data daily for billing and recommendation engines.
-- Uber: Relies on Kafka for real-time pricing and fraud detection across millions of rides.
-- LinkedIn: The original creator of Kafka, using it to power their central feeds and messaging systems.
-
-## Final Verdict
-
-Use RabbitMQ when you need:
-- Task-Oriented Workloads: Discrete jobs like sending emails or processing a specific payment.
-- Smart Routing: When the broker must decide which worker gets a message based on content.
-- Low Latency: When sub-5ms response times are required at moderate scale.
-
-Use Kafka when you need:
-- Multiple Independent Consumers: When analytics, audit, and billing teams all need to process the same event stream.
-- Data Replayability: When you need a durable, sequential record of history to rebuild state or debug issues.
-- Massive Throughput: When your events scale into the millions per second.
+**Kafka** — multiple independent consumers on the same stream, replayability, millions of events per second.
